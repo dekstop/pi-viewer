@@ -3,13 +3,14 @@
 /**
  * EP-1: Session info extractor
  * From `session` event, extract metadata.
+ * Optionally override the title with a user-defined name.
  */
-function extractSessionInfo(sessionEvent) {
+function extractSessionInfo(sessionEvent, titleOverride) {
   const cwd = sessionEvent.cwd || null;
   const parentSession = sessionEvent.parentSession || null;
   
-  // Derive display name from the session directory path
-  const title = deriveTitle(sessionEvent.id);
+  // Use provided title if present (user-defined), otherwise derive from session id
+  const title = titleOverride || deriveTitle(sessionEvent.id);
 
   return {
     sessionId: sessionEvent.id,
@@ -186,7 +187,21 @@ function parseMessageContent(messageEvent) {
 function buildSessionData(events) {
   // Extract session info
   const sessionEvent = events.find(e => e.type === 'session');
-  const sessionInfo = sessionEvent ? extractSessionInfo(sessionEvent) : null;
+  
+  // Extract user-defined session name from session_info entries (latest wins)
+  let sessionName = null;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.type === 'session_info' && ev.name) {
+      sessionName = ev.name;
+      break;
+    }
+  }
+  
+  // Use user-defined name if present, otherwise derive from session id
+  const title = sessionName || deriveTitle(sessionEvent?.id);
+  
+  const sessionInfo = sessionEvent ? extractSessionInfo(sessionEvent, title) : null;
   
   if (!sessionInfo) {
     return null;
@@ -199,15 +214,35 @@ function buildSessionData(events) {
   const turns = buildConversationTree(events);
   
   // Parse each message content
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCacheReadTokens = 0;
+  let totalCacheWriteTokens = 0;
+  let totalAllTokens = 0;
+
   const enrichedTurns = turns.map(turn => {
     const enrichedUser = turn.user ? { ...parseMessageContent(turn.user), id: turn.user.id, timestamp: turn.user.timestamp, role: turn.user.message?.role || turn.user.role } : null;
-    const enrichedAssistant = turn.assistant.map(a => ({
-      ...parseMessageContent(a),
-      id: a.id,
-      timestamp: a.timestamp,
-      role: a.message?.role || a.role,
-      model: a.message?.model || ''
-    }));
+    const enrichedAssistant = turn.assistant.map(a => {
+      const parsed = parseMessageContent(a);
+      const usage = a.message?.usage || null;
+      if (usage) {
+        totalInputTokens += usage.input || 0;
+        totalOutputTokens += usage.output || 0;
+        totalCacheReadTokens += usage.cacheRead || 0;
+        totalCacheWriteTokens += usage.cacheWrite || 0;
+        totalAllTokens += usage.totalTokens || (usage.input + usage.output || 0);
+      }
+      return {
+        ...parsed,
+        id: a.id,
+        timestamp: a.timestamp,
+        role: a.message?.role || a.role,
+        model: a.message?.model || '',
+        usage: usage,
+        stopReason: a.message?.stopReason || null,
+        errorMessage: a.message?.errorMessage || null
+      };
+    });
     
     const enrichedToolResults = turn.toolResults ? turn.toolResults.map(tr => ({
       ...parseMessageContent(tr),
@@ -216,6 +251,7 @@ function buildSessionData(events) {
       role: tr.message?.role || tr.role,
       toolName: tr.message?.toolName || tr.message?.toolCallId || '',
       toolCallId: tr.message?.toolCallId || '',
+      content: tr.message?.content || '',
       isError: tr.message?.isError || false,
       errorMessage: tr.message?.errorMessage || ''
     })) : [];
@@ -227,8 +263,17 @@ function buildSessionData(events) {
     };
   });
 
-  // Count compactions
-  const compactionCount = events.filter(e => e.type === 'compaction').length;
+  // Collect compaction details
+  const compactionEntries = events
+    .filter(e => e.type === 'compaction')
+    .map(c => ({
+      summary: c.summary || null,
+      tokensBefore: c.tokensBefore || null,
+      fromHook: c.fromHook || false,
+      details: c.details || null,
+      firstKeptEntryId: c.firstKeptEntryId || null
+    }));
+  const compactionCount = compactionEntries.length;
 
   // Get latest model from timeline
   const currentModel = modelTimeline.length > 0 ? modelTimeline[modelTimeline.length - 1] : null;
@@ -253,8 +298,14 @@ function buildSessionData(events) {
     thinkingTimeline,
     turns: enrichedTurns,
     compactionCount,
+    compactionEntries,
     currentModel,
-    durationSec
+    durationSec,
+    totalInputTokens,
+    totalOutputTokens,
+    totalCacheReadTokens,
+    totalCacheWriteTokens,
+    totalAllTokens
   };
 }
 

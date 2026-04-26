@@ -88,8 +88,17 @@ function buildUserMessage(user) {
  * Build an assistant message block with thinking, text, and tool calls.
  */
 function buildAssistantMessage(msg) {
-  const { thinking, text, toolCalls } = msg;
+  const { thinking, text, toolCalls, stopReason, errorMessage } = msg;
   const parts = [];
+  
+  // Error indicator if there's an error message or unexpected stop reason
+  const errorReasons = ['cancelled', 'error', 'load'];
+  const isUnexpectedStop = stopReason && !errorReasons.includes(stopReason) && stopReason !== 'toolUse' && stopReason !== 'endTurn';
+  
+  if (errorMessage || isUnexpectedStop) {
+    const errMsg = escapeHtml(errorMessage || `Unexpected stop reason: ${stopReason}`);
+    parts.push(`<div class="error-indicator">⚠️ ${errMsg}</div>`);
+  }
   
   // Thinking block (collapsible)
   if (thinking && thinking.length > 0) {
@@ -173,7 +182,7 @@ function buildToolResultMessage(msg) {
  * Show model, tokens, cost, duration info.
  */
 function buildMetadataCard(sessionData) {
-  const { title, timestamp, cwd, currentModel, durationSec, compactionCount } = sessionData;
+  const { title, timestamp, cwd, currentModel, durationSec, compactionCount, compactionEntries, totalInputTokens, totalOutputTokens, totalCacheReadTokens, totalCacheWriteTokens, totalAllTokens } = sessionData;
   
   let html = `<h1>${escapeHtml(title)}</h1>`;
   
@@ -196,8 +205,40 @@ function buildMetadataCard(sessionData) {
     html += `<div class="meta-row">📁 ${escapeHtml(cwd)}</div>`;
   }
   
+  // Token usage stats
+  if (totalAllTokens > 0) {
+    html += `<div class="meta-row">📊 Token stats:</div>`;
+    html += `<div class="meta-row token-stats">`; 
+    html += `📥 ${totalInputTokens.toLocaleString()} in `;
+    html += `📤 ${totalOutputTokens.toLocaleString()} out `;
+    html += `📊 ${totalAllTokens.toLocaleString()} total`;
+    if (totalCacheReadTokens > 0) {
+      html += ` • 🧠 ${totalCacheReadTokens.toLocaleString()} cached`;
+      if (totalCacheWriteTokens > 0) {
+        html += `/ ${totalCacheWriteTokens.toLocaleString()} written`;
+      }
+    }
+    html += `</div>`;
+  }
+  
   if (compactionCount > 0) {
-    html += `<div class="meta-row">🗑 Compactions: ${compactionCount}</div>`;
+    const hookCount = (compactionEntries || []).filter(c => c.fromHook).length;
+    html += `<div class="meta-row">🗑 Compactions: ${compactionCount}${hookCount > 0 ? ` (${hookCount} auto)` : ''}</div>`;
+    
+    // Render expandable compaction summaries
+    if (compactionEntries && compactionEntries.length > 0) {
+      const compactionDetails = compactionEntries
+        .map((c, idx) => {
+          const hookTag = c.fromHook ? ' <span class="hook-tag">auto</span>' : '';
+          const tokensStr = c.tokensBefore ? ` • ${c.tokensBefore.toLocaleString()} tokens` : '';
+          const summaryHtml = c.summary ? `<div class="compaction-summary">${escapeHtml(c.summary.substring(0, 300))}${c.summary.length > 300 ? '…' : ''}</div>` : '';
+          return `<details class="compaction-detail" id="compaction-${idx}">
+            <summary>Compaction ${idx + 1}${hookTag}${tokensStr}</summary>
+            ${summaryHtml}
+          </details>`;
+        }).join('\n');
+      html += `<div class="compaction-details">${compactionDetails}</div>`;
+    }
   }
   
   return `<div class="metadata-card">${html}</div>`;
@@ -327,6 +368,31 @@ const CSS = `
     margin-right: 1.5rem;
     margin-bottom: 0.5rem;
     color: #666;
+  }
+  
+  .meta-row .token-stats {
+    display: block;
+    margin-left: 2rem;
+    font-size: 0.82rem;
+    color: #888;
+  }
+  
+  .error-indicator {
+    background: #ffebee;
+    border: 1px solid #ef9a9a;
+    border-radius: 4px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.82rem;
+    color: #c62828;
+    margin-top: 0.5rem;
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .error-indicator {
+      background: #3e2424;
+      border-color: #6c4a4a;
+      color: #ef9a9a;
+    }
   }
   
   @media (prefers-color-scheme: dark) {
@@ -484,6 +550,43 @@ const CSS = `
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
+  }
+  
+  .compaction-details {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  
+  .compaction-detail {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  
+  .compaction-detail summary {
+    padding: 0.4rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: #888;
+    background: var(--code-bg);
+  }
+  
+  .compaction-summary {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    color: #666;
+    white-space: pre-wrap;
+  }
+  
+  .hook-tag {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.3rem;
+    background: var(--accent);
+    color: white;
+    border-radius: 3px;
+    margin-left: 0.3rem;
   }
   
   .tool-call-badge {

@@ -33,6 +33,34 @@
 
 ---
 
+## ✅ Completed — NEP-6: Extract token usage from assistant messages
+
+- [x] **NEP-6**: Extract token usage from assistant messages — show in metadata card
+  - In `buildSessionData()`, extract `usage` field from each assistant message (`input`, `output`, `cacheRead`, `cacheWrite`, `totalTokens`)
+  - Accumulate session-level token totals
+  - HTML metadata card shows token breakdown: `📥 2,889 in / 208 out / 5,325 total` (plus cached tokens if present)
+  - Also extracts `stopReason` and `errorMessage` from assistant messages
+
+---
+
+## ✅ Completed — NEP-2: Parse compaction details
+
+- [x] **NEP-2**: Parse compaction details — show summary, token counts, fromHook flag
+  - Collect all `compaction` events in `buildSessionData()` as an array of `{summary, tokensBefore, fromHook, details, firstKeptEntryId}` objects
+  - HTML metadata card now shows compaction count (with auto-count if hook-triggered)
+  - Expandable compaction detail cards showing token counts and summaries
+
+---
+
+## ✅ Completed — NEP-1: Parse `session_info` entries
+
+- [x] **NEP-1**: Parse `session_info` entries — use user-defined session names as titles
+  - Added `'session_info'` to `parseJsonl()` valid types
+  - In `buildSessionData()`, scan events in reverse for the latest `session_info` entry and extract `name`
+  - Use `name` as title if present, fall back to current `deriveTitle()` logic
+
+---
+
 ## 🔍 New Data from Session Manager Source
 
 The Pi agent's official `session-manager.ts` reveals several event types and data fields currently missing from the viewer:
@@ -172,17 +200,17 @@ File: `packages/coding-agent/src/core/session-manager.ts` (pi-mono repo)
 ## Priority Queue
 
 ### NEP (New Entry Parsing) — High Priority
-1. **NEP-1**: Parse `session_info` entries — use user-defined session names as titles
-2. **NEP-2**: Parse compaction details — show summary, token counts, fromHook flag
-3. **NEP-6**: Extract token usage from assistant messages — show in metadata card
-4. **NEP-5**: Parse and display tool call results — correlate toolCall with toolResult
-5. **NEP-7**: Show `stopReason` and `errorMessage` — flag failed API calls
+1. ✅ **NEP-1**: Parse `session_info` entries — DONE
+2. ✅ **NEP-2**: Parse compaction details — DONE
+3. ✅ **NEP-6**: Extract token usage from assistant messages — DONE
+4. **NEP-7**: Show `stopReason` and `errorMessage` — flag failed API calls
+5. **NEP-8**: Parse and display tool call results — correlate toolCall with toolResult
 6. **NEP-3**: Parse `branch_summary` entries — show abandoned path context
 7. **NEP-4**: Parse `label` entries — show bookmarks on conversation entries
-8. **NEP-5 (continued)**: Parse `custom_message` entries — forward-compatible with extensions
+8. **NEP-5**: Parse `custom` and `custom_message` entries — forward-compatible with extensions
 
 ### Traditional Enhancements
-1. Token tracking (NEP-6)
+1. ~~Token tracking~~ (NEP-6) — DONE
 2. Markdown rendering + code syntax highlighting
 3. Search functionality
 4. Copy buttons

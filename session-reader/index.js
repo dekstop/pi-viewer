@@ -42,6 +42,7 @@ function discoverSessions(baseDir) {
 function parseJsonl(filePath) {
   const validTypes = new Set([
     'session',
+    'session_info',
     'model_change',
     'thinking_level_change',
     'message',
