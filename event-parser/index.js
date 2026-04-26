@@ -90,13 +90,13 @@ function buildConversationTree(events) {
     return tsA - tsB;
   });
 
-  // Determine what parentId values are message ids (to distinguish message-parented from event-parented)
-  const messageIds = new Set(allMessages.map(m => m.id));
-
-  // Find user messages: those whose parentId is NOT a message id
+  // Find user messages: every user message starts a new turn.
+  // In Pi's session model, parentId defines tree structure (branching path),
+  // not turn boundaries. A user replying to an assistant or toolResult is
+  // still a new turn — the fork is captured by the tree, not hidden.
   const userMessages = allMessages.filter(m => {
     const role = m.message?.role || m.role;
-    return role === 'user' && (!messageIds.has(m.parentId));
+    return role === 'user';
   });
 
   // Build turns: user message + assistant responses + toolResults
