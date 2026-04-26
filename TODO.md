@@ -61,6 +61,24 @@
 
 ---
 
+## ✅ Completed — NEP-7: Show `stopReason` and `errorMessage`
+
+- [x] **NEP-7**: Show `stopReason` and `errorMessage` — flag failed API calls
+  - In `buildSessionData()`, extract `stopReason` and `errorMessage` from assistant messages
+  - Add to enriched assistant message objects alongside `usage`, `model`
+  - HTML metadata card shows error indicator (⚠️ error message) when `errorMessage` exists
+  - HTML assistant message header shows a stop-reason badge:
+    - `🔧 Tool` for `toolUse`
+    - `✅ End` for `endTurn`
+    - `⏹ Stop` for normal `stop`
+    - `📏 Length` for `length` (max tokens reached)
+    - `⚠️ <reason>` for unexpected reasons
+  - Only `errorMessage` and truly unexpected stop reasons show the warning indicator
+  - Normal completion reasons (`stop`, `length`, `toolUse`, `endTurn`, `cancelled`) are NOT flagged
+  - Source: `AgentMessage` fields from pi-agent-core + OpenAI API conventions
+
+---
+
 ## 🔍 New Data from Session Manager Source
 
 The Pi agent's official `session-manager.ts` reveals several event types and data fields currently missing from the viewer:
@@ -148,11 +166,11 @@ File: `packages/coding-agent/src/core/session-manager.ts` (pi-mono repo)
   - **HTML**: Add token breakdown to metadata card (e.g., `📊 2,889 in / 208 out / 5,325 total`), plus running total across session.
   - **Source**: `usage` field on assistant `AgentMessage` objects.
 
-- [ ] **NEP-7: Show `stopReason` and `errorMessage`**
+- [x] **NEP-7: Show `stopReason` and `errorMessage`**
   - **What**: Parse `message.stopReason` and `message.errorMessage` from assistant messages.
   - **Impact**: Visually flag failed API calls and show why the model stopped.
-  - **Implementation**: In `parseMessageContent()` or a new `parseMessageMetadata()`, extract `stopReason` and `errorMessage`. Add to enriched assistant message objects.
-  - **HTML**: If `stopReason !== "toolUse"` and `stopReason !== "endTurn"`, show a warning indicator. If `errorMessage` exists, show error text in a styled error block.
+  - **Implementation**: In `buildSessionData()`, extract `stopReason` and `errorMessage` from assistant messages. Add to enriched assistant message objects.
+  - **HTML**: Show error indicator (⚠️ error message) when `errorMessage` exists. Show stop-reason badge in assistant message header (`🔧 Tool`, `✅ End`, `⏹ Stop`, `📏 Length`, or `⚠️ <reason>`). Only truly unexpected stop reasons or error messages show the warning indicator.
   - **Source**: `AgentMessage` fields from pi-agent-core.
 
 - [ ] **NEP-8: Parse and display tool call results**
@@ -203,7 +221,7 @@ File: `packages/coding-agent/src/core/session-manager.ts` (pi-mono repo)
 1. ✅ **NEP-1**: Parse `session_info` entries — DONE
 2. ✅ **NEP-2**: Parse compaction details — DONE
 3. ✅ **NEP-6**: Extract token usage from assistant messages — DONE
-4. **NEP-7**: Show `stopReason` and `errorMessage` — flag failed API calls
+4. ✅ **NEP-7**: Show `stopReason` and `errorMessage` — flag failed API calls
 5. **NEP-8**: Parse and display tool call results — correlate toolCall with toolResult
 6. **NEP-3**: Parse `branch_summary` entries — show abandoned path context
 7. **NEP-4**: Parse `label` entries — show bookmarks on conversation entries

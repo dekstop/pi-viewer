@@ -91,13 +91,14 @@ function buildAssistantMessage(msg) {
   const { thinking, text, toolCalls, stopReason, errorMessage } = msg;
   const parts = [];
   
-  // Error indicator if there's an error message or unexpected stop reason
-  const errorReasons = ['cancelled', 'error', 'load'];
-  const isUnexpectedStop = stopReason && !errorReasons.includes(stopReason) && stopReason !== 'toolUse' && stopReason !== 'endTurn';
+  // Valid/expected stop reasons: normal completions from the model
+  const expectedStopReasons = ['toolUse', 'endTurn', 'stop', 'length', 'cancelled'];
   
-  if (errorMessage || isUnexpectedStop) {
-    const errMsg = escapeHtml(errorMessage || `Unexpected stop reason: ${stopReason}`);
-    parts.push(`<div class="error-indicator">⚠️ ${errMsg}</div>`);
+  // Show error indicator if there's an error message or truly unexpected stop reason
+  if (errorMessage) {
+    parts.push(`<div class="error-indicator">⚠️ ${escapeHtml(errorMessage)}</div>`);
+  } else if (stopReason && !expectedStopReasons.includes(stopReason)) {
+    parts.push(`<div class="error-indicator">⚠️ Unexpected stop reason: ${escapeHtml(stopReason)}</div>`);
   }
   
   // Thinking block (collapsible)
@@ -134,11 +135,17 @@ function buildAssistantMessage(msg) {
   
   const timestamp = msg.timestamp ? formatTimestamp(msg.timestamp) : '';
   const model = msg.model || '';
+  let stopBadge = '';
+  if (stopReason) {
+    const stopLabel = stopReason === 'toolUse' ? '🔧 Tool' : stopReason === 'endTurn' ? '✅ End' : stopReason === 'stop' ? '⏹ Stop' : stopReason === 'length' ? '📏 Length' : `⚠️ ${stopReason}`;
+    stopBadge = `<span class="stop-badge" title="Stop reason: ${escapeHtml(stopReason)}">${stopLabel}</span>`;
+  }
   
   return `<div class="message assistant-message">
     <div class="message-header">
       <span class="role-badge assistant-badge">Assistant</span>
       ${model ? `<span class="model-label">${escapeHtml(model)}</span>` : ''}
+      ${stopBadge}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
     </div>
     <div class="message-body-wrapper">
@@ -492,6 +499,21 @@ const CSS = `
     padding: 0.1rem 0.4rem;
     border-radius: 3px;
     font-size: 0.75rem;
+  }
+  
+  .stop-badge {
+    background: var(--code-bg);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    color: #555;
+    border: 1px solid var(--border);
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .stop-badge {
+      color: #bbb;
+    }
   }
   
   .message-time {
