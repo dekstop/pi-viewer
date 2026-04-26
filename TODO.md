@@ -79,6 +79,21 @@
 
 ---
 
+## ✅ Completed — NEP-8: Parse and display tool call results
+
+- [x] **NEP-8**: Parse and display tool call results — correlate toolCall with toolResult
+  - In `buildSessionData()`, build a `toolCallId` → result lookup map from `toolResults` in each turn
+  - Added `extractResultText()` helper to safely extract text from toolResult content arrays
+  - Enrich each tool call with `result` containing: `toolCallId`, `toolName`, `text`, `isError`, `errorMessage`
+  - HTML assistant message header shows result preview inline within the tool call badge
+  - Color-coded results: ✅ green for success, ❌ red for errors
+  - Long results (>100 chars) show collapsed preview with "Show full result" expand link
+  - CSS: `.tool-call-result.result-success` and `.tool-call-result.result-error` classes
+  - JS: `toggleToolResult()` function for expand/collapse behavior
+  - Source: `toolResult` message type with `toolCallId`, `content`, `isError`, `errorMessage` fields
+
+---
+
 ## 🔍 New Data from Session Manager Source
 
 The Pi agent's official `session-manager.ts` reveals several event types and data fields currently missing from the viewer:
@@ -222,7 +237,7 @@ File: `packages/coding-agent/src/core/session-manager.ts` (pi-mono repo)
 2. ✅ **NEP-2**: Parse compaction details — DONE
 3. ✅ **NEP-6**: Extract token usage from assistant messages — DONE
 4. ✅ **NEP-7**: Show `stopReason` and `errorMessage` — flag failed API calls
-5. **NEP-8**: Parse and display tool call results — correlate toolCall with toolResult
+5. ✅ **NEP-8**: Parse and display tool call results — DONE
 6. **NEP-3**: Parse `branch_summary` entries — show abandoned path context
 7. **NEP-4**: Parse `label` entries — show bookmarks on conversation entries
 8. **NEP-5**: Parse `custom` and `custom_message` entries — forward-compatible with extensions

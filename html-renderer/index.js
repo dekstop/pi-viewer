@@ -115,21 +115,39 @@ function buildAssistantMessage(msg) {
     parts.push(`<div class="message-body">${escapeHtml(text)}</div>`);
   }
   
-  // Tool calls summary
+  // Tool calls summary with inline results (NEP-8)
   if (toolCalls && toolCalls.length > 0) {
     const toolCallHtml = toolCalls.map(tc => {
+      const icon = getToolCallIcon(tc.name);
       let preview = '';
       if (typeof tc.arguments === 'string' && tc.arguments) {
         preview = tc.arguments.substring(0, 50);
       } else if (typeof tc.arguments === 'object' && tc.arguments) {
-        // Extract first meaningful value from object arguments
         const keys = Object.keys(tc.arguments);
         preview = keys.map(k => `${k}: ${tc.arguments[k]}`).join(', ').substring(0, 50);
       }
-      const icon = getToolCallIcon(tc.name);
-      return `<span class="tool-call-badge">${icon} ${escapeHtml(tc.name)}${preview ? ` — ${escapeHtml(preview)}…` : ''}</span>`;
+
+      const badgeId = `tc-${tc.toolCallId || tc.name}-${Math.random().toString(36).slice(2, 8)}`;
+
+      // Show result inline if available
+      let resultHtml = '';
+      if (tc.result) {
+        const resultClass = tc.result.isError ? 'result-error' : 'result-success';
+        const resultIcon = tc.result.isError ? '❌' : '✅';
+        const resultText = tc.result.errorMessage || tc.result.text;
+        const previewText = resultText ? resultText.substring(0, 100) : '';
+        const isLong = (resultText || '').length > 100;
+        const expandId = `tr-${tc.toolCallId || tc.name}-${Math.random().toString(36).slice(2, 8)}`;
+        resultHtml = `<span class="tool-call-result ${resultClass}">${resultIcon} ${escapeHtml(tc.result.toolName || '')}${isLong ? ` ${escapeHtml(previewText)}…` : ''}</span>`;
+        if (isLong && resultText) {
+          resultHtml += `<span class="tool-call-result-full" style="display:none" id="${expandId}">${escapeHtml(resultText)}</span>`;
+          resultHtml += ` <span class="tool-call-result-expand" data-target="${expandId}" onclick="toggleToolResult(this)">Show full result</span>`;
+        }
+      }
+
+      return `<span class="tool-call-badge" id="${badgeId}">${icon} ${escapeHtml(tc.name)}${preview ? ` — ${escapeHtml(preview)}…` : ''}${resultHtml}</span>`;
     }).join(' ');
-    
+
     parts.push(`<div class="tool-calls">${toolCallHtml}</div>`);
   }
   
@@ -650,6 +668,47 @@ const CSS = `
     }
   }
   
+  /* NEP-8: Inline tool call results */
+  .tool-call-result {
+    margin-left: 0.3rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+  
+  .tool-call-result.result-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+  
+  .tool-call-result.result-error {
+    background: #ffebee;
+    color: #c62828;
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .tool-call-result.result-success {
+      background: #1b3a20;
+      color: #a5d6a7;
+    }
+    .tool-call-result.result-error {
+      background: #3e2424;
+      color: #ef9a9a;
+    }
+  }
+  
+  .tool-call-result-expand {
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.72rem;
+    margin-left: 0.2rem;
+  }
+  
+  .tool-call-result-expand:hover {
+    text-decoration: underline;
+  }
+  
   @media (max-width: 600px) {
     .content {
       flex-direction: column;
@@ -674,6 +733,21 @@ const JS = `
       } else {
         fullMsg.style.display = 'none';
         el.textContent = 'Show full message';
+      }
+    }
+  }
+
+  // NEP-8: Toggle inline tool call result expansion
+  function toggleToolResult(el) {
+    const targetId = el.dataset.target;
+    const fullText = document.getElementById(targetId);
+    if (fullText) {
+      if (fullText.style.display === 'none') {
+        fullText.style.display = 'inline';
+        el.textContent = 'Show less';
+      } else {
+        fullText.style.display = 'none';
+        el.textContent = 'Show full result';
       }
     }
   }

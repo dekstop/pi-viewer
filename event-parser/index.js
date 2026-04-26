@@ -220,6 +220,34 @@ function buildSessionData(events) {
   let totalCacheWriteTokens = 0;
   let totalAllTokens = 0;
 
+  // NEP-8: Build toolCallId -> result lookup for correlation
+  // Maps toolCallId from the toolCall block to the full toolResult object
+  const toolResultByCallId = new Map();
+  for (const turn of turns) {
+    if (turn.toolResults) {
+      for (const tr of turn.toolResults) {
+        const callId = tr.message?.toolCallId || tr.toolCallId || null;
+        if (callId) {
+          toolResultByCallId.set(callId, tr);
+        }
+      }
+    }
+  }
+
+  // Helper to extract text content from a toolResult message
+  function extractResultText(result) {
+    const content = result.content || result.message?.content || [];
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content
+        .filter(b => b && b.type === 'text')
+        .map(b => b.text || b.value || '')
+        .join('\n')
+        .trim();
+    }
+    return '';
+  }
+
   const enrichedTurns = turns.map(turn => {
     const enrichedUser = turn.user ? { ...parseMessageContent(turn.user), id: turn.user.id, timestamp: turn.user.timestamp, role: turn.user.message?.role || turn.user.role } : null;
     const enrichedAssistant = turn.assistant.map(a => {
@@ -232,8 +260,27 @@ function buildSessionData(events) {
         totalCacheWriteTokens += usage.cacheWrite || 0;
         totalAllTokens += usage.totalTokens || (usage.input + usage.output || 0);
       }
+
+      // NEP-8: Correlate each toolCall with its result
+      const enrichedToolCalls = (parsed.toolCalls || []).map(tc => {
+        const result = toolResultByCallId.get(tc.toolCallId);
+        let resultSummary = null;
+        if (result) {
+          const resultText = extractResultText(result);
+          resultSummary = {
+            toolCallId: tc.toolCallId,
+            toolName: result.toolName || (result.message?.toolName) || tc.name,
+            text: resultText,
+            isError: result.isError || (result.message?.isError) || false,
+            errorMessage: result.errorMessage || (result.message?.errorMessage) || ''
+          };
+        }
+        return { ...tc, result: resultSummary };
+      });
+
       return {
         ...parsed,
+        toolCalls: enrichedToolCalls,
         id: a.id,
         timestamp: a.timestamp,
         role: a.message?.role || a.role,
@@ -243,7 +290,7 @@ function buildSessionData(events) {
         errorMessage: a.message?.errorMessage || null
       };
     });
-    
+
     const enrichedToolResults = turn.toolResults ? turn.toolResults.map(tr => ({
       ...parseMessageContent(tr),
       id: tr.id,
@@ -255,7 +302,7 @@ function buildSessionData(events) {
       isError: tr.message?.isError || false,
       errorMessage: tr.message?.errorMessage || ''
     })) : [];
-    
+
     return {
       user: enrichedUser,
       assistant: enrichedAssistant,
