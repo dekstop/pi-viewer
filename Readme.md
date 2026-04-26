@@ -36,7 +36,7 @@ index.js          ← Entry point: CLI args, session discovery, orchestrator
 ### Key Design Decisions
 
 - **Per-session HTML files**: Each session becomes its own standalone page.
-- **Index file**: `index.html` lists all sessions grouped by directory, with links to individual pages.
+- **Index file**: `index.html` lists all sessions in reverse date order (newest first) as responsive flexbox cards. Each card shows the session title, date, directory path, first user prompt preview, and summary counts (user/assistant/tool/thinking/result messages, model).
 - **Session tree**: Sessions with `parentSession` references are displayed as a collapsible tree.
 - **Expandable reasoning**: `thinking` blocks are collapsed by default, expandable on click.
 - **Metadata emphasis**: Model, tokens, and timing info appears but is visually subdued.

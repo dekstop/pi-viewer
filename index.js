@@ -95,6 +95,20 @@ function main() {
     const session = sessions.find(s => s.filePath === entry.filePath);
     if (session) {
       const hasChildren = childMap.has(session.data.sessionId);
+      const turns = session.data.turns || [];
+      const firstUser = turns.find(t => t.user)?.user;
+      const firstUserPrompt = firstUser ? firstUser.text || '' : '';
+      
+      // Count message types
+      let userCount = 0, assistantCount = 0, toolCallCount = 0, thinkingCount = 0, resultCount = 0;
+      for (const turn of turns) {
+        if (turn.user) userCount++;
+        assistantCount += turn.assistant?.length || 0;
+        toolCallCount += (turn.assistant || []).reduce((sum, a) => sum + (a.toolCalls?.length || 0), 0);
+        thinkingCount += (turn.assistant || []).reduce((sum, a) => sum + (a.thinking?.length || 0), 0);
+        resultCount += turn.toolResults?.length || 0;
+      }
+
       return {
         ...entry,
         sessionId: session.data.sessionId,
@@ -102,7 +116,14 @@ function main() {
         timestamp: session.data.timestamp,
         date: session.data.timestamp ? new Date(session.data.timestamp).toLocaleDateString() : '',
         model: session.data.currentModel ? `${session.data.currentModel.provider || ''} / ${session.data.currentModel.model || ''}` : '',
-        hasChildren
+        hasChildren,
+        firstUserPrompt,
+        userCount,
+        assistantCount,
+        toolCallCount,
+        thinkingCount,
+        resultCount,
+        directory: session.directory || entry.directory
       };
     }
     return entry;
