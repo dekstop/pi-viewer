@@ -334,7 +334,36 @@ function buildSessionData(events) {
       details: b.details || null
     }));
 
+  // NEP-5: Collect custom_message entries (extension-injected messages for LLM context)
+  const customMessageEntries = events
+    .filter(e => e.type === 'custom_message')
+    .map(cm => ({
+      id: cm.id || null,
+      customType: cm.customType || '',
+      content: typeof cm.content === 'string' ? cm.content : '',
+      display: cm.display !== false, // default true
+      details: cm.details || null,
+      timestamp: cm.timestamp || null
+    }));
+
+  // Collect custom entries (extension state, not shown in UI)
+  const customEntries = events
+    .filter(e => e.type === 'custom')
+    .map(c => ({
+      id: c.id || null,
+      customType: c.customType || '',
+      data: c.data || null
+    }));
+
   // NEP-4: Build labels map (latest label wins for each target)
+  // Also collect all labels in order for display
+  const labelEntries = events
+    .filter(e => e.type === 'label' && e.label)
+    .map(l => ({
+      targetId: l.targetId || null,
+      label: l.label || '',
+      timestamp: l.timestamp || null
+    }));
   const labelsById = new Map();
   const labelTimestampsById = new Map();
   for (let i = events.length - 1; i >= 0; i--) {
@@ -345,14 +374,33 @@ function buildSessionData(events) {
       break; // only need the latest
     }
   }
-  // Also collect all labels in order for display
-  const labelEntries = events
-    .filter(e => e.type === 'label' && e.label)
-    .map(l => ({
-      targetId: l.targetId || null,
-      label: l.label || '',
-      timestamp: l.timestamp || null
+
+  // Build a messageId -> label lookup for annotating messages
+  const labelsByMessageId = new Map();
+  for (const entry of labelEntries) {
+    if (entry.label) {
+      labelsByMessageId.set(entry.targetId, entry.label);
+    }
+  }
+
+  // Annotate enriched turns with labels
+  const labeledTurns = enrichedTurns.map(turn => {
+    const labeledUser = turn.user ? { ...turn.user, label: labelsByMessageId.get(turn.user.id) || null } : null;
+    const labeledAssistant = turn.assistant.map(a => ({
+      ...a,
+      label: labelsByMessageId.get(a.id) || null
     }));
+    const labeledToolResults = turn.toolResults.map(tr => ({
+      ...tr,
+      label: labelsByMessageId.get(tr.id) || null
+    }));
+
+    return {
+      user: labeledUser,
+      assistant: labeledAssistant,
+      toolResults: labeledToolResults
+    };
+  });
 
   // Get latest model from timeline
   const currentModel = modelTimeline.length > 0 ? modelTimeline[modelTimeline.length - 1] : null;
@@ -375,10 +423,14 @@ function buildSessionData(events) {
     parentSessionId: sessionInfo.parentSessionId,
     modelTimeline,
     thinkingTimeline,
-    turns: enrichedTurns,
+    turns: labeledTurns,
     compactionCount,
     compactionEntries,
     branchSummaryEntries,
+    customMessageEntries,
+    customEntries,
+    labelEntries,
+    labelsById,
     currentModel,
     durationSec,
     totalInputTokens,

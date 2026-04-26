@@ -31,6 +31,20 @@
 
 ## 🔄 In Progress
 
+### NEP-4: Parse label entries (bookmarks)
+- [ ] **NEP-4a**: Annotate messages/turns with labels in event-parser
+- [ ] **NEP-4b**: Add bookmark indicators to HTML renderer
+- [ ] **NEP-4c**: Show label count in metadata card
+
+### NEP-5: Parse `custom` and `custom_message` entries
+- [ ] **NEP-5a**: Add validTypes for custom and custom_message in session-reader
+- [ ] **NEP-5b**: Collect custom_message entries in event-parser
+- [ ] **NEP-5c**: Render custom_message blocks in conversation view
+- [ ] **NEP-5d**: Style custom_message distinctly from user messages
+
+## ✅ Completed
+
+
 ## ✅ Completed — NEP-6: Extract token usage from assistant messages
 
 - [x] **NEP-6**: Extract token usage from assistant messages — show in metadata card

@@ -48,7 +48,9 @@ function parseJsonl(filePath) {
     'message',
     'compaction',
     'branch_summary',
-    'label'
+    'label',
+    'custom',
+    'custom_message'
   ]);
 
   const events = [];

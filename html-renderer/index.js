@@ -58,11 +58,19 @@ function buildConversationView(sessionData) {
         .map(tr => buildToolResultMessage(tr))
         .join('\n');
 
+      // NEP-4: Show label summary if this turn has labels
+      const turnLabelHtml = buildTurnLabelSummary(turn);
+
+      // NEP-5: Insert custom messages before this turn if applicable
+      const customMessageHtml = buildCustomMessagesBeforeTurn(sessionData, idx);
+
       // NEP-3: Insert branch summary before this turn if applicable
       const branchSummaryHtml = buildBranchSummaryBeforeTurn(sessionData, idx);
 
       return `<div class="turn turn-${idx + 1}">
+        ${customMessageHtml}
         ${branchSummaryHtml}
+        ${turnLabelHtml}
         ${userHtml}
         ${assistantHtml}
         ${toolResultsHtml}
@@ -82,10 +90,12 @@ function buildUserMessage(user) {
   const text = user.text || '';
   const summary = text.split('\n')[0] || 'User message';
   const timestamp = user.timestamp ? formatTimestamp(user.timestamp) : '';
+  const labelHtml = user.label ? buildBookmarkIndicator(user.label) : '';
   
   return `<div class="message user-message">
     <div class="message-header">
       <span class="role-badge user-badge">User</span>
+      ${labelHtml}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
     </div>
     <div class="message-body">${escapeHtml(summary)}</div>
@@ -174,6 +184,7 @@ function buildAssistantMessage(msg) {
       <span class="role-badge assistant-badge">Assistant</span>
       ${model ? `<span class="model-label">${escapeHtml(model)}</span>` : ''}
       ${stopBadge}
+      ${msg.label ? buildBookmarkIndicator(msg.label) : ''}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
     </div>
     <div class="message-body-wrapper">
@@ -188,11 +199,13 @@ function buildAssistantMessage(msg) {
 function buildToolResultMessage(msg) {
   const { text, toolName, isError, errorMessage } = msg;
   const timestamp = msg.timestamp ? formatTimestamp(msg.timestamp) : '';
+  const labelHtml = msg.label ? buildBookmarkIndicator(msg.label) : '';
   
   if (isError) {
     return `<div class="message tool-result-message tool-result-error">
       <div class="message-header">
         <span class="role-badge tool-result-badge">⚠️ Error</span>
+        ${labelHtml}
         ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
       </div>
       <div class="message-body">${escapeHtml(errorMessage || 'Tool execution failed')}</div>
@@ -205,6 +218,7 @@ function buildToolResultMessage(msg) {
   return `<div class="message tool-result-message">
     <div class="message-header">
       <span class="role-badge tool-result-badge">🔧 ${escapeHtml(toolName || 'Tool Result')}</span>
+      ${labelHtml}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
     </div>
     <div class="message-body">${escapeHtml(preview)}</div>
@@ -217,7 +231,7 @@ function buildToolResultMessage(msg) {
  * Show model, tokens, cost, duration info.
  */
 function buildMetadataCard(sessionData) {
-  const { title, timestamp, cwd, currentModel, durationSec, compactionCount, compactionEntries, totalInputTokens, totalOutputTokens, totalCacheReadTokens, totalCacheWriteTokens, totalAllTokens } = sessionData;
+  const { title, timestamp, cwd, currentModel, durationSec, compactionCount, compactionEntries, labelEntries, totalInputTokens, totalOutputTokens, totalCacheReadTokens, totalCacheWriteTokens, totalAllTokens } = sessionData;
   
   let html = `<h1>${escapeHtml(title)}</h1>`;
   
@@ -274,6 +288,17 @@ function buildMetadataCard(sessionData) {
         }).join('\n');
       html += `<div class="compaction-details">${compactionDetails}</div>`;
     }
+  }
+  
+  // NEP-4: Show label count
+  const labelCount = labelEntries ? labelEntries.filter(l => l.label).length : 0;
+  if (labelCount > 0) {
+    const labelsDisplay = labelEntries
+      .filter(l => l.label)
+      .map(l => escapeHtml(l.label))
+      .join(', ');
+    const tooltip = labelsDisplay.length > 100 ? labelsDisplay.substring(0, 100) + '…' : labelsDisplay;
+    html += `<div class="meta-row" title="Bookmarks: ${labelsDisplay}">🔖 Bookmarks: ${labelCount} <span style="color:#888;font-size:0.78rem">(${tooltip})</span></div>`;
   }
   
   return `<div class="metadata-card">${html}</div>`;
@@ -377,6 +402,109 @@ function buildBranchSummaryBlock(branchSummary) {
       </summary>
       <div class="branch-summary-content">${escapeHtml(branchSummary.summary || '(no summary)')}</div>
     </details>
+  </div>`;
+}
+
+/**
+ * NEP-4: Build a bookmark indicator for a labeled message.
+ */
+function buildBookmarkIndicator(label) {
+  return `<span class="bookmark-indicator" title="Bookmark: ${escapeHtml(label)}">🔖 ${escapeHtml(label)}</span>`;
+}
+
+/**
+ * NEP-4: Build a label summary for a turn that has labeled messages.
+ * Shows the label text above the turn so it's clearly associated.
+ */
+function buildTurnLabelSummary(turn) {
+  const labels = [];
+  if (turn.user && turn.user.label) labels.push({ id: turn.user.id, label: turn.user.label, role: 'User' });
+  for (const a of (turn.assistant || [])) {
+    if (a.label) labels.push({ id: a.id, label: a.label, role: 'Assistant' });
+  }
+  for (const tr of (turn.toolResults || [])) {
+    if (tr.label) labels.push({ id: tr.id, label: tr.label, role: 'Tool Result' });
+  }
+
+  if (labels.length === 0) return '';
+
+  const labelItems = labels.map(l => `<span class="bookmark-indicator" title="${escapeHtml(l.label)}">🔖 ${escapeHtml(l.label)}</span>`);
+  return `<div class="turn-labels">${labelItems.join(' ')}</div>`;
+}
+
+/**
+ * NEP-5: Build custom_message block(s) before a given turn index.
+ * Custom messages are extension-injected messages that participate in LLM context.
+ */
+let _renderedCustomMessageIds = null;
+
+function buildCustomMessagesBeforeTurn(sessionData, turnIdx) {
+  if (!sessionData.customMessageEntries || sessionData.customMessageEntries.length === 0) {
+    return '';
+  }
+
+  if (_renderedCustomMessageIds === null) {
+    _renderedCustomMessageIds = new Set();
+  }
+
+  const turn = sessionData.turns[turnIdx];
+  if (!turn) return '';
+
+  // Collect all message IDs in this turn
+  const turnIds = new Set();
+  if (turn.user) turnIds.add(turn.user.id);
+  for (const assistant of (turn.assistant || [])) {
+    turnIds.add(assistant.id);
+  }
+  for (const tr of (turn.toolResults || [])) {
+    turnIds.add(tr.id);
+  }
+
+  // Also collect all message IDs up to this turn (for messages that reference earlier entries)
+  const allPrevIds = new Set();
+  for (let i = 0; i <= turnIdx; i++) {
+    const t = sessionData.turns[i];
+    if (t) {
+      if (t.user) allPrevIds.add(t.user.id);
+      for (const a of (t.assistant || [])) allPrevIds.add(a.id);
+      for (const tr of (t.toolResults || [])) allPrevIds.add(tr.id);
+    }
+  }
+
+  let html = '';
+  for (const cm of sessionData.customMessageEntries) {
+    if (_renderedCustomMessageIds.has(cm.id)) continue;
+    if (cm.display === false) continue;
+    // Render custom messages that match this turn or have been unattached so far
+    // Custom messages without a clear parent are rendered before all turns
+    if (allPrevIds.has(cm.id) || _renderedCustomMessageIds.size === 0) {
+      _renderedCustomMessageIds.add(cm.id);
+      html += '\n' + buildCustomMessageBlock(cm);
+    }
+  }
+  return html;
+}
+
+/**
+ * Build a single custom_message block.
+ * Styled as a distinct message type (different from regular user messages).
+ */
+function buildCustomMessageBlock(cm) {
+  const timestamp = cm.timestamp ? formatTimestamp(cm.timestamp) : '';
+  const typeTag = cm.customType ? `<span class="custom-type-tag">${escapeHtml(cm.customType)}</span>` : '';
+  const content = cm.content || '';
+  const preview = content.trim().substring(0, 200) || '(empty)';
+  const isLong = content.length > 200;
+  
+  return `<div class="message custom-message">
+    <div class="message-header">
+      <span class="role-badge custom-badge">📦 Custom</span>
+      ${typeTag}
+      ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
+    </div>
+    <div class="message-body">${escapeHtml(preview)}</div>
+    ${isLong ? `<div class="message-full" style="display:none"><pre>${escapeHtml(content.trim())}</pre></div>
+    <div class="message-expand" onclick="toggleExpand(this)">Show full message</div>` : ''}
   </div>`;
 }
 
@@ -676,6 +804,34 @@ const CSS = `
     color: #999;
     font-family: monospace;
   }
+
+  /* NEP-4: Bookmark indicators */
+  .bookmark-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: #fff3e0;
+    color: #e65100;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    margin-left: 0.35rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .bookmark-indicator {
+      background: #3e3a2a;
+      color: #ffb74d;
+    }
+  }
+
+  .turn-labels {
+    margin-top: 0.35rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
   
   .message-body {
     font-size: 0.95rem;
@@ -804,7 +960,47 @@ const CSS = `
       color: #ef9a9a;
     }
   }
-  
+
+  /* NEP-5: Custom message entries */
+  .custom-message {
+    background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+    border-left: 3px solid #9c27b0;
+    opacity: 0.92;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .custom-message {
+      background: linear-gradient(135deg, #1a3a5c, #3a1a5c);
+    }
+  }
+
+  .custom-badge {
+    color: #7b1fa2;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .custom-badge {
+      color: #ce93c8;
+    }
+  }
+
+  .custom-type-tag {
+    background: #f3e5f5;
+    color: #7b1fa2;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    font-family: monospace;
+    margin-left: 0.35rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .custom-type-tag {
+      background: #3e2a5c;
+      color: #ce93c8;
+    }
+  }
+
   /* NEP-8: Inline tool call results */
   .tool-call-result {
     margin-left: 0.3rem;
