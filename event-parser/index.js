@@ -1,0 +1,268 @@
+'use strict';
+
+/**
+ * EP-1: Session info extractor
+ * From `session` event, extract metadata.
+ */
+function extractSessionInfo(sessionEvent) {
+  const cwd = sessionEvent.cwd || null;
+  const parentSession = sessionEvent.parentSession || null;
+  
+  // Derive display name from the session directory path
+  const title = deriveTitle(sessionEvent.id);
+
+  return {
+    sessionId: sessionEvent.id,
+    title,
+    timestamp: sessionEvent.timestamp || null,
+    cwd,
+    parentSessionId: parentSession
+  };
+}
+
+/**
+ * Derive a human-readable title from the session directory path.
+ * Strip `--home-` prefix and restore path separators.
+ */
+function deriveTitle(sessionId) {
+  if (!sessionId) return 'Untitled Session';
+  
+  // The session id is typically a hash/directory name
+  // We'll try to extract something readable from it
+  const parts = sessionId.split('--');
+  if (parts.length > 2) {
+    // Join parts after stripping 'home' prefix
+    const relevantParts = parts.slice(1);
+    const title = relevantParts.join('/').replace(/-/g, ' ');
+    return title || 'Untitled Session';
+  }
+  
+  return sessionId.substring(0, 32) + '...';
+}
+
+/**
+ * EP-2: Model & thinking state tracker
+ * Build timelines from model_change and thinking_level_change events.
+ */
+function buildStateTimelines(events) {
+  const modelTimeline = [];
+  const thinkingTimeline = [];
+
+  for (const event of events) {
+    if (event.type === 'model_change' && event.provider && event.modelId) {
+      modelTimeline.push({
+        timestamp: event.timestamp,
+        provider: event.provider,
+        model: event.modelId
+      });
+    } else if (event.type === 'thinking_level_change') {
+      thinkingTimeline.push({
+        timestamp: event.timestamp,
+        level: event.level || event.thinkingLevel
+      });
+    }
+  }
+
+  return { modelTimeline, thinkingTimeline };
+}
+
+/**
+ * EP-3: Conversation tree builder
+ * Build a tree of message events keyed by id, with parentId references.
+ * Group messages into turns: a user message + its assistant response(s) form one turn.
+ * Also groups toolResult messages with their parent assistant response.
+ */
+function buildConversationTree(events) {
+  const messages = events.filter(e => e.type === 'message');
+  
+  // Index messages by id for O(1) lookup
+  const msgMap = new Map();
+
+  for (const msg of messages) {
+    msgMap.set(msg.id, msg);
+  }
+
+  // Sort all messages by timestamp
+  const allMessages = [...messages].sort((a, b) => {
+    const tsA = a.timestamp || 0;
+    const tsB = b.timestamp || 0;
+    return tsA - tsB;
+  });
+
+  // Determine what parentId values are message ids (to distinguish message-parented from event-parented)
+  const messageIds = new Set(allMessages.map(m => m.id));
+
+  // Find user messages: those whose parentId is NOT a message id
+  const userMessages = allMessages.filter(m => {
+    const role = m.message?.role || m.role;
+    return role === 'user' && (!messageIds.has(m.parentId));
+  });
+
+  // Build turns: user message + assistant responses + toolResults
+  const turns = [];
+  
+  for (const userMsg of userMessages) {
+    const turn = {
+      user: userMsg,
+      assistant: [],
+      toolResults: [],
+      parentId: userMsg.parentId || null
+    };
+    
+    // Find all assistant messages that reference this user message as parentId
+    const responses = allMessages.filter(
+      m => (m.message?.role === 'assistant' || m.role === 'assistant') && m.parentId === userMsg.id
+    );
+    
+    turn.assistant = responses;
+    
+    // Find toolResult messages for each assistant response
+    for (const resp of responses) {
+      const toolResults = allMessages.filter(
+        m => (m.message?.role === 'toolResult' || m.role === 'toolResult') && m.parentId === resp.id
+      );
+      toolResults.forEach(tr => {
+        tr.associatedAssistantId = resp.id;
+        turn.toolResults.push(tr);
+      });
+    }
+    
+    turns.push(turn);
+  }
+
+  return turns;
+}
+
+/**
+ * EP-4: Message content parser
+ * Extract thinking blocks, text, and toolCall blocks from message events.
+ */
+function parseMessageContent(messageEvent) {
+  const content = messageEvent.content || messageEvent.message?.content || [];
+  const thinking = [];
+  const textBlocks = [];
+  const toolCalls = [];
+
+  if (!Array.isArray(content)) {
+    // Fallback: content might be a string
+    return {
+      thinking,
+      text: typeof content === 'string' ? content : '',
+      toolCalls: []
+    };
+  }
+
+  for (const block of content) {
+    if (!block) continue;
+    
+    if (block.type === 'thinking') {
+      if (block.thinking || block.value) {
+        thinking.push(block.thinking || block.value || '');
+      }
+    } else if (block.type === 'text') {
+      textBlocks.push(block.text || block.value || '');
+    } else if (block.type === 'toolCall') {
+      toolCalls.push({
+        name: block.name || '',
+        arguments: block.arguments || '',
+        toolCallId: block.toolCallId || block.id || null
+      });
+    }
+  }
+
+  const text = textBlocks.join('\n').trim();
+  
+  return {
+    thinking,
+    text,
+    toolCalls
+  };
+}
+
+/**
+ * EP-5: Build session data structure
+ * Combine all parsed pieces into a single structure per session.
+ */
+function buildSessionData(events) {
+  // Extract session info
+  const sessionEvent = events.find(e => e.type === 'session');
+  const sessionInfo = sessionEvent ? extractSessionInfo(sessionEvent) : null;
+  
+  if (!sessionInfo) {
+    return null;
+  }
+
+  // Build state timelines
+  const { modelTimeline, thinkingTimeline } = buildStateTimelines(events);
+  
+  // Build conversation tree
+  const turns = buildConversationTree(events);
+  
+  // Parse each message content
+  const enrichedTurns = turns.map(turn => {
+    const enrichedUser = turn.user ? { ...parseMessageContent(turn.user), id: turn.user.id, timestamp: turn.user.timestamp, role: turn.user.message?.role || turn.user.role } : null;
+    const enrichedAssistant = turn.assistant.map(a => ({
+      ...parseMessageContent(a),
+      id: a.id,
+      timestamp: a.timestamp,
+      role: a.message?.role || a.role,
+      model: a.message?.model || ''
+    }));
+    
+    const enrichedToolResults = turn.toolResults ? turn.toolResults.map(tr => ({
+      ...parseMessageContent(tr),
+      id: tr.id,
+      timestamp: tr.timestamp,
+      role: tr.message?.role || tr.role,
+      toolName: tr.message?.toolName || tr.message?.toolCallId || '',
+      toolCallId: tr.message?.toolCallId || '',
+      isError: tr.message?.isError || false,
+      errorMessage: tr.message?.errorMessage || ''
+    })) : [];
+    
+    return {
+      user: enrichedUser,
+      assistant: enrichedAssistant,
+      toolResults: enrichedToolResults
+    };
+  });
+
+  // Count compactions
+  const compactionCount = events.filter(e => e.type === 'compaction').length;
+
+  // Get latest model from timeline
+  const currentModel = modelTimeline.length > 0 ? modelTimeline[modelTimeline.length - 1] : null;
+  
+  // Calculate duration from first to last event
+  // Timestamps can be ISO 8601 strings or epoch numbers
+  const timestamps = events.map(e => {
+    const ts = e.timestamp;
+    if (!ts) return null;
+    return typeof ts === 'string' ? new Date(ts).getTime() : Number(ts);
+  }).filter(Boolean).sort((a, b) => a - b);
+  const durationMs = timestamps.length >= 2 ? timestamps[timestamps.length - 1] - timestamps[0] : 0;
+  const durationSec = Math.round(durationMs / 1000);
+
+  return {
+    sessionId: sessionInfo.sessionId,
+    title: sessionInfo.title,
+    timestamp: sessionInfo.timestamp,
+    cwd: sessionInfo.cwd,
+    parentSessionId: sessionInfo.parentSessionId,
+    modelTimeline,
+    thinkingTimeline,
+    turns: enrichedTurns,
+    compactionCount,
+    currentModel,
+    durationSec
+  };
+}
+
+module.exports = {
+  extractSessionInfo,
+  deriveTitle,
+  buildStateTimelines,
+  buildConversationTree,
+  parseMessageContent,
+  buildSessionData
+};
