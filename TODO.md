@@ -2,6 +2,17 @@
 
 ## ✅ Completed
 
+### NEP-4: Parse label entries (bookmarks) ✅
+- [x] **NEP-4a**: Annotate messages/turns with labels in event-parser
+- [x] **NEP-4b**: Add bookmark indicators to HTML renderer (🔖 badge)
+- [x] **NEP-4c**: Show label count and bookmark names in metadata card
+
+### NEP-5: Parse `custom` and `custom_message` entries ✅
+- [x] **NEP-5a**: Add validTypes for custom and custom_message in session-reader
+- [x] **NEP-5b**: Collect custom_message entries in event-parser
+- [x] **NEP-5c**: Render custom_message blocks in conversation view
+- [x] **NEP-5d**: Style custom_message distinctly from user messages (purple gradient, custom badge)
+
 ### Phase 1: Session Reader (`session-reader`) ✅
 - [x] **SR-1**: Parse `.jsonl` files
 - [x] **SR-2**: Discover session files
@@ -28,19 +39,6 @@
 - [x] **CL-3**: Styling polish (dark mode, mobile-friendly)
 
 ---
-
-## 🔄 In Progress
-
-### NEP-4: Parse label entries (bookmarks)
-- [ ] **NEP-4a**: Annotate messages/turns with labels in event-parser
-- [ ] **NEP-4b**: Add bookmark indicators to HTML renderer
-- [ ] **NEP-4c**: Show label count in metadata card
-
-### NEP-5: Parse `custom` and `custom_message` entries
-- [ ] **NEP-5a**: Add validTypes for custom and custom_message in session-reader
-- [ ] **NEP-5b**: Collect custom_message entries in event-parser
-- [ ] **NEP-5c**: Render custom_message blocks in conversation view
-- [ ] **NEP-5d**: Style custom_message distinctly from user messages
 
 ## ✅ Completed
 
