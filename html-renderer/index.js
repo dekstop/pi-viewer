@@ -40,6 +40,9 @@ function buildPage(sessionData, options = {}) {
  * Render messages in a conversation flow.
  */
 function buildConversationView(sessionData) {
+  // NEP-3: Reset branch summary tracking for each page render
+  _renderedBranchSummaryIds = null;
+  
   if (!sessionData.turns || sessionData.turns.length === 0) {
     return '<div class="no-messages">No conversation messages found.</div>';
   }
@@ -54,15 +57,22 @@ function buildConversationView(sessionData) {
       const toolResultsHtml = (turn.toolResults || [])
         .map(tr => buildToolResultMessage(tr))
         .join('\n');
-      
+
+      // NEP-3: Insert branch summary before this turn if applicable
+      const branchSummaryHtml = buildBranchSummaryBeforeTurn(sessionData, idx);
+
       return `<div class="turn turn-${idx + 1}">
+        ${branchSummaryHtml}
         ${userHtml}
         ${assistantHtml}
         ${toolResultsHtml}
       </div>`;
     }).join('\n');
 
-  return turnsHtml;
+  // NEP-3: Append any branch summaries that don't attach to a turn
+  const remainingBranchSummaries = buildOrphanBranchSummaries(sessionData);
+
+  return turnsHtml + remainingBranchSummaries;
 }
 
 /**
@@ -290,6 +300,83 @@ function buildSessionTree(sessionData) {
         </ul>
       </li>
     </ul>
+  </div>`;
+}
+
+/**
+ * NEP-3: Build branch summary block(s) before a given turn index.
+ * Attaches branch summaries whose fromId matches messages in that turn.
+ * Tracks which summaries have been rendered to avoid duplicates.
+ */
+let _renderedBranchSummaryIds = null;
+
+function buildBranchSummaryBeforeTurn(sessionData, turnIdx) {
+  if (!sessionData.branchSummaryEntries || sessionData.branchSummaryEntries.length === 0) {
+    return '';
+  }
+  
+  if (_renderedBranchSummaryIds === null) {
+    _renderedBranchSummaryIds = new Set();
+  }
+  
+  const turn = sessionData.turns[turnIdx];
+  if (!turn) return '';
+  
+  // Collect all message IDs in this turn
+  const turnIds = new Set();
+  if (turn.user) turnIds.add(turn.user.id);
+  for (const assistant of (turn.assistant || [])) {
+    turnIds.add(assistant.id);
+  }
+  for (const tr of (turn.toolResults || [])) {
+    turnIds.add(tr.id);
+  }
+  
+  let html = '';
+  for (const bs of sessionData.branchSummaryEntries) {
+    if (_renderedBranchSummaryIds.has(bs.id)) continue;
+    // Attach if fromId matches any message in this turn
+    if (turnIds.has(bs.fromId)) {
+      _renderedBranchSummaryIds.add(bs.id);
+      html += '\n' + buildBranchSummaryBlock(bs);
+    }
+  }
+  return html;
+}
+
+function buildOrphanBranchSummaries(sessionData) {
+  if (!sessionData.branchSummaryEntries || sessionData.branchSummaryEntries.length === 0) {
+    return '';
+  }
+  
+  let html = '';
+  for (const bs of sessionData.branchSummaryEntries) {
+    if (!_renderedBranchSummaryIds || !_renderedBranchSummaryIds.has(bs.id)) {
+      _renderedBranchSummaryIds.add(bs.id);
+      html += '\n' + buildBranchSummaryBlock(bs);
+    }
+  }
+  return html;
+}
+
+/**
+ * Build a single branch summary block.
+ * Styled as a collapsible context block between conversation turns.
+ */
+function buildBranchSummaryBlock(branchSummary) {
+  const timestamp = branchSummary.timestamp ? formatTimestamp(branchSummary.timestamp) : '';
+  const hookTag = branchSummary.fromHook ? ' <span class="hook-tag">auto</span>' : '';
+  const fromIdPreview = branchSummary.fromId ? `<span class="branch-from-id">${escapeHtml(branchSummary.fromId.substring(0, 12))}…</span>` : '';
+  
+  return `<div class="branch-summary" id="branch-summary-${branchSummary.id ? branchSummary.id.substring(0, 8) : Math.random().toString(36).slice(2, 8)}">
+    <details class="branch-summary-details">
+      <summary class="branch-summary-summary">
+        🌿 Branch${hookTag} — ${escapeHtml(branchSummary.summary || 'Branch summary').substring(0, 80)}${branchSummary.summary && branchSummary.summary.length > 80 ? '…' : ''}
+        ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
+        ${fromIdPreview}
+      </summary>
+      <div class="branch-summary-content">${escapeHtml(branchSummary.summary || '(no summary)')}</div>
+    </details>
   </div>`;
 }
 
@@ -538,6 +625,56 @@ const CSS = `
     margin-left: auto;
     color: #888;
     font-size: 0.75rem;
+  }
+  
+  /* NEP-3: Branch summary blocks */
+  .branch-summary {
+    margin: 0.5rem 0;
+  }
+  
+  .branch-summary-details {
+    border: 1px dashed #ce93c8;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(206, 145, 200, 0.06);
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .branch-summary-details {
+      border-color: #7b4fa0;
+      background: rgba(123, 79, 160, 0.12);
+    }
+  }
+  
+  .branch-summary-summary {
+    padding: 0.45rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: #7b1fa2;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .branch-summary-summary {
+      color: #ce93c8;
+    }
+  }
+  
+  .branch-summary-content {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    color: #666;
+    background: var(--code-bg);
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+  
+  .branch-from-id {
+    font-size: 0.7rem;
+    color: #999;
+    font-family: monospace;
   }
   
   .message-body {

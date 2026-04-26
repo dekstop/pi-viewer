@@ -31,8 +31,6 @@
 
 ## 🔄 In Progress
 
----
-
 ## ✅ Completed — NEP-6: Extract token usage from assistant messages
 
 - [x] **NEP-6**: Extract token usage from assistant messages — show in metadata card

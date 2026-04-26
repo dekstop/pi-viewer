@@ -109,6 +109,9 @@ function main() {
         resultCount += turn.toolResults?.length || 0;
       }
 
+      // NEP-3: Count branch summaries
+      const branchSummaryCount = session.data.branchSummaryEntries?.length || 0;
+
       return {
         ...entry,
         sessionId: session.data.sessionId,
@@ -123,6 +126,7 @@ function main() {
         toolCallCount,
         thinkingCount,
         resultCount,
+        branchSummaryCount,
         directory: session.directory || entry.directory
       };
     }

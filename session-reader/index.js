@@ -46,7 +46,9 @@ function parseJsonl(filePath) {
     'model_change',
     'thinking_level_change',
     'message',
-    'compaction'
+    'compaction',
+    'branch_summary',
+    'label'
   ]);
 
   const events = [];

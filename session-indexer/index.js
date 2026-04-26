@@ -174,6 +174,10 @@ function generateIndex(sessionList) {
       background: var(--border);
       color: #666;
     }
+    .badge-branch {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
     @media (prefers-color-scheme: dark) {
       .badge-user { background: #0d3b66; }
       .badge-assistant { background: #1b3a20; }
@@ -181,6 +185,7 @@ function generateIndex(sessionList) {
       .badge-thinking { background: #2a2a3e; }
       .badge-result { background: #2a1a4e; }
       .badge-model { background: #333; color: #aaa; }
+      .badge-branch { background: #3a1f5e; color: #ce93c8; }
     }
     .tree-indicator {
       color: var(--accent);
@@ -222,6 +227,7 @@ ${sorted.map(session => {
         <span class="badge badge-tool" title="Tool calls">🔧 ${session.toolCallCount || 0}</span>
         <span class="badge badge-thinking" title="Thinking blocks">💭 ${session.thinkingCount || 0}</span>
         <span class="badge badge-result" title="Tool results">📋 ${session.resultCount || 0}</span>
+        ${session.branchSummaryCount > 0 ? `<span class="badge badge-branch" title="Branch summaries">🌿 ${session.branchSummaryCount || 0}</span>` : ''}
         ${session.model ? `<span class="badge badge-model" title="Model">${escapeHtml(session.model)}</span>` : ''}
       </div>
     </div>`;

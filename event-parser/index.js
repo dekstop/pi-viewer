@@ -322,6 +322,38 @@ function buildSessionData(events) {
     }));
   const compactionCount = compactionEntries.length;
 
+  // NEP-3: Collect branch_summary entries
+  const branchSummaryEntries = events
+    .filter(e => e.type === 'branch_summary')
+    .map(b => ({
+      id: b.id || null,
+      fromId: b.fromId || null,
+      summary: b.summary || '',
+      timestamp: b.timestamp || null,
+      fromHook: b.fromHook || false,
+      details: b.details || null
+    }));
+
+  // NEP-4: Build labels map (latest label wins for each target)
+  const labelsById = new Map();
+  const labelTimestampsById = new Map();
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.type === 'label' && ev.label) {
+      labelsById.set(ev.targetId, ev.label);
+      labelTimestampsById.set(ev.targetId, ev.timestamp);
+      break; // only need the latest
+    }
+  }
+  // Also collect all labels in order for display
+  const labelEntries = events
+    .filter(e => e.type === 'label' && e.label)
+    .map(l => ({
+      targetId: l.targetId || null,
+      label: l.label || '',
+      timestamp: l.timestamp || null
+    }));
+
   // Get latest model from timeline
   const currentModel = modelTimeline.length > 0 ? modelTimeline[modelTimeline.length - 1] : null;
   
@@ -346,6 +378,7 @@ function buildSessionData(events) {
     turns: enrichedTurns,
     compactionCount,
     compactionEntries,
+    branchSummaryEntries,
     currentModel,
     durationSec,
     totalInputTokens,
