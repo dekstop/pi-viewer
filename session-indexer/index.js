@@ -217,7 +217,7 @@ ${sorted.map(session => {
         <a href="${session.link}">
           <div class="card-title">${escapeHtml(session.title || session.sessionId)}</div>
         </a>
-        <span class="card-date">${session.date || ''}</span>
+        <span class="card-date" title="${session.date || ''}">${session.dateFull || ''}</span>
       </div>
       <div class="card-dir" title="${dirText}">${dirText}</div>
       <div class="${previewClass}">${previewText}</div>

@@ -90,6 +90,28 @@ function main() {
   console.log(`\n📑 Generating index.html...`);
   const entries = parseSessionEntries(sessions.map(s => s.filePath));
   
+  // British date formatter: DD/MM/YYYY
+  function toBritishDate(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  // British date+time formatter: DD/MM/YYYY HH:mm
+  function toBritishDateFull(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  }
+
   // Enrich entries with session data and tree info
   const enrichedEntries = entries.map(entry => {
     const session = sessions.find(s => s.filePath === entry.filePath);
@@ -117,7 +139,8 @@ function main() {
         sessionId: session.data.sessionId,
         title: session.data.title,
         timestamp: session.data.timestamp,
-        date: session.data.timestamp ? new Date(session.data.timestamp).toLocaleDateString() : '',
+        date: toBritishDate(session.data.timestamp),
+        dateFull: toBritishDateFull(session.data.timestamp),
         model: session.data.currentModel ? `${session.data.currentModel.provider || ''} / ${session.data.currentModel.model || ''}` : '',
         hasChildren,
         firstUserPrompt,

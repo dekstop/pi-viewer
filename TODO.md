@@ -42,6 +42,22 @@
 
 ## ✅ Completed
 
+### EP-9: Fix conversation tree builder — handle forked/resumed sessions correctly ✅
+- [x] **EP-9a**: Implemented BFS traversal to recursively collect descendant assistant messages and toolResults
+  - Bug: `buildConversationTree` only found assistants with `parentId === userMsg.id`
+  - In Pi's model, assistant messages can chain through toolResults: `user → assistant → toolResult → toolResult → assistant → ...`
+  - BFS correctly stops at user messages (new turn boundaries) and follows assistant → toolResult chains
+- [x] **EP-9b**: Tested with forked sessions and resumed sessions (model_change mid-session)
+  - Single-turn sessions now show 22-64 assistant messages instead of just 1
+  - Multi-turn sessions still show correct turn boundaries (6 turns, 28 assistants)
+- [x] **EP-9c**: Regenerated test output and verified counts match
+
+### CL-4: Fix date formats and add times to index cards ✅
+- [x] **CL-4a**: British date format (DD/MM/YYYY) in index.js
+- [x] **CL-4b**: Times shown on index card tooltips (`27/04/2026 08:16`)
+  - Short date shown as tooltip, full date+time shown visibly on card
+
+---
 
 ## ✅ Completed — NEP-6: Extract token usage from assistant messages
 

@@ -72,6 +72,11 @@ function buildStateTimelines(events) {
  * Build a tree of message events keyed by id, with parentId references.
  * Group messages into turns: a user message + its assistant response(s) form one turn.
  * Also groups toolResult messages with their parent assistant response.
+ *
+ * In Pi's session model, the message chain can be:
+ *   user → assistant → toolResult → toolResult → assistant → ...
+ * Assistant messages may respond to toolResults (not directly to user).
+ * We need recursive traversal to find all descendant assistants and toolResults.
  */
 function buildConversationTree(events) {
   const messages = events.filter(e => e.type === 'message');
@@ -91,42 +96,67 @@ function buildConversationTree(events) {
   });
 
   // Find user messages: every user message starts a new turn.
-  // In Pi's session model, parentId defines tree structure (branching path),
-  // not turn boundaries. A user replying to an assistant or toolResult is
-  // still a new turn — the fork is captured by the tree, not hidden.
   const userMessages = allMessages.filter(m => {
     const role = m.message?.role || m.role;
     return role === 'user';
   });
 
+  // Collect messages that belong to a turn.
+  // In Pi's model, messages chain through parentId:
+  //   user → assistant → toolResult → assistant → toolResult → ...
+  // An assistant may respond to a user message OR to a toolResult.
+  // A toolResult chains to another toolResult (multi-call responses).
+  // We collect: direct assistant children + their toolResults +
+  // assistants responding to those toolResults (but stop at user messages).
+  function collectTurnMessages(rootId) {
+    const assistants = [];
+    const toolResults = [];
+    const visited = new Set();
+    
+    // Queue-based BFS to avoid infinite loops
+    const queue = [{ id: rootId, type: 'user' }];
+    
+    while (queue.length > 0) {
+      const { id, type } = queue.shift();
+      
+      // Find all messages whose parentId === id
+      const children = allMessages.filter(
+        m => m.parentId === id
+      );
+      
+      for (const child of children) {
+        if (visited.has(child.id)) continue;
+        visited.add(child.id);
+        
+        const role = child.message?.role || child.role;
+        
+        if (role === 'assistant') {
+          assistants.push(child);
+          // Continue BFS from this assistant
+          queue.push({ id: child.id, type: 'assistant' });
+        } else if (role === 'toolResult') {
+          toolResults.push(child);
+          // Continue BFS from this toolResult
+          queue.push({ id: child.id, type: 'toolResult' });
+        }
+        // User messages stop the chain - they begin a new turn
+      }
+    }
+    
+    return { assistants, toolResults };
+  }
+
   // Build turns: user message + assistant responses + toolResults
   const turns = [];
   
   for (const userMsg of userMessages) {
+    const result = collectTurnMessages(userMsg.id);
     const turn = {
       user: userMsg,
-      assistant: [],
-      toolResults: [],
+      assistant: result.assistants,
+      toolResults: result.toolResults,
       parentId: userMsg.parentId || null
     };
-    
-    // Find all assistant messages that reference this user message as parentId
-    const responses = allMessages.filter(
-      m => (m.message?.role === 'assistant' || m.role === 'assistant') && m.parentId === userMsg.id
-    );
-    
-    turn.assistant = responses;
-    
-    // Find toolResult messages for each assistant response
-    for (const resp of responses) {
-      const toolResults = allMessages.filter(
-        m => (m.message?.role === 'toolResult' || m.role === 'toolResult') && m.parentId === resp.id
-      );
-      toolResults.forEach(tr => {
-        tr.associatedAssistantId = resp.id;
-        turn.toolResults.push(tr);
-      });
-    }
     
     turns.push(turn);
   }
