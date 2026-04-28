@@ -50,11 +50,13 @@
   - **Key consideration**: Thinking blocks are collapsible (`<details>`) — ensure rendering works inside collapsed content.
   - Files affected: `html-renderer/index.js` (add renderer, modify `buildAssistantMessage`, `buildToolResultMessage`).
 - **Sub-tasks**:
-  - [ ] **MR-1a**: Choose and embed markdown renderer (inline script in generated HTML)
-  - [ ] **MR-1b**: Apply markdown rendering to assistant text content
-  - [ ] **MR-1c**: Apply markdown rendering to thinking blocks
-  - [ ] **MR-1d**: Apply markdown rendering to tool result text
-  - [ ] **MR-1e**: Add CSS for rendered markdown elements (`<code>`, `<pre>`, `<ul>`, `<ol>`, `<blockquote>`, `<table>`, etc.)
+  - [x] **MR-1a**: Choose and embed markdown renderer (marked.js via CDN)
+  - [x] **MR-1b**: Apply markdown rendering to assistant text content
+  - [x] **MR-1c**: Apply markdown rendering to thinking blocks
+  - [x] **MR-1d**: Apply markdown rendering to tool result text
+  - [x] **MR-1e**: Add CSS for rendered markdown elements (`<code>`, `<pre>`, `<ul>`, `<ol>`, `<blockquote>`, `<table>`, etc.)
+- **Done**: 2026-04-28
+- **Implementation notes**: Uses `marked` from CDN (v14.1.0). Client-side JS escapes HTML first then calls `marked.parse()`. All message types (assistant, thinking, tool results, custom messages, branch summaries, compaction summaries) use `data-markdown` attributes. CSS includes styles for headings, lists, blockquotes, tables, inline code, and code blocks. Dark mode aware.
 
 ---
 

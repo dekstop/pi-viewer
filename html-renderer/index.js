@@ -14,6 +14,7 @@ function buildPage(sessionData, options = {}) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@14.1.0/marked.min.js"></script>
   <style>
     ${CSS}
   </style>
@@ -121,18 +122,18 @@ function buildAssistantMessage(msg) {
     parts.push(`<div class="error-indicator">⚠️ Unexpected stop reason: ${escapeHtml(stopReason)}</div>`);
   }
   
-  // Thinking block (collapsible)
+  // Thinking block (collapsible, MR-1: markdown rendering)
   if (thinking && thinking.length > 0) {
     const thinkingText = thinking.join('\n');
     parts.push(`<details class="thinking-block">
       <summary>💭 Thinking</summary>
-      <div class="thinking-content">${escapeHtml(thinkingText)}</div>
+      <div class="thinking-content" data-markdown="${escapeHtml(thinkingText)}"></div>
     </details>`);
   }
   
-  // Text content
+  // Text content (MR-1: markdown rendering)
   if (text) {
-    parts.push(`<div class="message-body">${escapeHtml(text)}</div>`);
+    parts.push(`<div class="message-body" data-markdown="${escapeHtml(text)}"></div>`);
   }
   
   // Tool calls summary with inline results (NEP-8)
@@ -213,7 +214,7 @@ function buildToolResultMessage(msg) {
   }
   
   const preview = text ? text.trim().substring(0, 200) + (text.length > 200 ? '…' : '') : 'No output';
-  const expandClass = text && text.length > 200 ? `<div class="message-full" style="display:none"><pre>${escapeHtml(text.trim())}</pre></div><div class="message-expand" onclick="toggleExpand(this)">${text.length > 200 ? 'Show full result' : 'Show full result'}</div>` : '';
+  const expandClass = text && text.length > 200 ? `<div class="message-full" style="display:none"><pre data-markdown="${escapeHtml(text.trim())}"></pre></div><div class="message-expand" onclick="toggleExpand(this)">${text.length > 200 ? 'Show full result' : 'Show full result'}</div>` : '';
   
   return `<div class="message tool-result-message">
     <div class="message-header">
@@ -221,7 +222,7 @@ function buildToolResultMessage(msg) {
       ${labelHtml}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
     </div>
-    <div class="message-body">${escapeHtml(preview)}</div>
+    <div class="message-body" data-markdown="${escapeHtml(preview)}"></div>
     ${expandClass}
   </div>`;
 }
@@ -280,7 +281,7 @@ function buildMetadataCard(sessionData) {
         .map((c, idx) => {
           const hookTag = c.fromHook ? ' <span class="hook-tag">auto</span>' : '';
           const tokensStr = c.tokensBefore ? ` • ${c.tokensBefore.toLocaleString()} tokens` : '';
-          const summaryHtml = c.summary ? `<div class="compaction-summary">${escapeHtml(c.summary.substring(0, 300))}${c.summary.length > 300 ? '…' : ''}</div>` : '';
+          const summaryHtml = c.summary ? `<div class="compaction-summary" data-markdown="${escapeHtml(c.summary.substring(0, 300))}${c.summary.length > 300 ? '…' : ''}"></div>` : '';
           return `<details class="compaction-detail" id="compaction-${idx}">
             <summary>Compaction ${idx + 1}${hookTag}${tokensStr}</summary>
             ${summaryHtml}
@@ -400,7 +401,7 @@ function buildBranchSummaryBlock(branchSummary) {
         ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
         ${fromIdPreview}
       </summary>
-      <div class="branch-summary-content">${escapeHtml(branchSummary.summary || '(no summary)')}</div>
+      <div class="branch-summary-content" data-markdown="${escapeHtml(branchSummary.summary || '(no summary)')}"></div>
     </details>
   </div>`;
 }
@@ -502,8 +503,8 @@ function buildCustomMessageBlock(cm) {
       ${typeTag}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
     </div>
-    <div class="message-body">${escapeHtml(preview)}</div>
-    ${isLong ? `<div class="message-full" style="display:none"><pre>${escapeHtml(content.trim())}</pre></div>
+    <div class="message-body" data-markdown="${escapeHtml(preview)}"></div>
+    ${isLong ? `<div class="message-full" style="display:none"><pre data-markdown="${escapeHtml(content.trim())}"></pre></div>
     <div class="message-expand" onclick="toggleExpand(this)">Show full message</div>` : ''}
   </div>`;
 }
@@ -846,6 +847,197 @@ const CSS = `
     font-size: 0.85rem;
   }
   
+  /* MR-1e: Markdown rendering styles */
+  .message-body h1,
+  .message-body h2,
+  .message-body h3,
+  .message-body h4,
+  .message-body h5,
+  .message-body h6 {
+    margin: 0.8rem 0 0.4rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  
+  .message-body h1 { font-size: 1.3rem; }
+  .message-body h2 { font-size: 1.15rem; }
+  .message-body h3 { font-size: 1.05rem; }
+  
+  .message-body p {
+    margin: 0.5rem 0;
+  }
+  
+  .message-body p:first-child {
+    margin-top: 0;
+  }
+  
+  .message-body ul,
+  .message-body ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+  }
+  
+  .message-body li {
+    margin: 0.25rem 0;
+  }
+  
+  .message-body blockquote {
+    margin: 0.5rem 0;
+    padding: 0.35rem 0.75rem;
+    border-left: 3px solid var(--accent);
+    color: #666;
+    background: var(--code-bg);
+    border-radius: 0 4px 4px 0;
+  }
+  
+  @media (prefers-color-scheme: dark) {
+    .message-body blockquote {
+      color: #aaa;
+    }
+  }
+  
+  .message-body table {
+    border-collapse: collapse;
+    margin: 0.5rem 0;
+    width: 100%;
+    overflow-x: auto;
+    display: block;
+  }
+  
+  .message-body th,
+  .message-body td {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+  }
+  
+  .message-body th {
+    background: var(--code-bg);
+    font-weight: 600;
+  }
+  
+  .message-body tr:nth-child(even) {
+    background: var(--code-bg);
+  }
+  
+  .message-body hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1rem 0;
+  }
+  
+  .message-body a {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+  
+  .message-body img {
+    max-width: 100%;
+    border-radius: 4px;
+  }
+  
+  .message-body code {
+    background: var(--code-bg);
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.88em;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+  }
+  
+  .message-body pre {
+    margin: 0.5rem 0;
+  }
+  
+  .message-body pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    font-size: 0.85rem;
+  }
+  
+  /* MR-1e: Markdown styles for thinking blocks */
+  .thinking-content h1,
+  .thinking-content h2,
+  .thinking-content h3,
+  .thinking-content h4,
+  .thinking-content h5,
+  .thinking-content h6 {
+    margin: 0.5rem 0 0.25rem;
+    font-size: 0.9rem;
+    color: #888;
+  }
+  
+  .thinking-content p {
+    margin: 0.3rem 0;
+  }
+  
+  .thinking-content ul,
+  .thinking-content ol {
+    margin: 0.3rem 0;
+    padding-left: 1.25rem;
+  }
+  
+  .thinking-content li {
+    margin: 0.15rem 0;
+  }
+  
+  .thinking-content code {
+    background: rgba(0,0,0,0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+  
+  .thinking-content pre {
+    margin: 0.4rem 0;
+  }
+  
+  /* MR-1e: Markdown styles for branch summaries */
+  .branch-summary-content h1,
+  .branch-summary-content h2,
+  .branch-summary-content h3 {
+    margin: 0.4rem 0 0.2rem;
+    font-size: 0.88rem;
+  }
+  
+  .branch-summary-content p {
+    margin: 0.3rem 0;
+  }
+  
+  .branch-summary-content code {
+    background: rgba(0,0,0,0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+  
+  .branch-summary-content pre {
+    margin: 0.3rem 0;
+  }
+  
+  /* MR-1e: Markdown styles for compaction summaries */
+  .compaction-summary h1,
+  .compaction-summary h2,
+  .compaction-summary h3 {
+    margin: 0.4rem 0 0.2rem;
+    font-size: 0.88rem;
+  }
+  
+  .compaction-summary p {
+    margin: 0.3rem 0;
+  }
+  
+  .compaction-summary code {
+    background: rgba(0,0,0,0.1);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+  
+  .compaction-summary pre {
+    margin: 0.3rem 0;
+  }
+  
   .message-expand {
     color: var(--accent);
     cursor: pointer;
@@ -1053,9 +1245,107 @@ const CSS = `
 `;
 
 /**
- * Inline JS for expand/collapse behavior.
+ * Inline JS for expand/collapse and markdown rendering.
  */
 const JS = `
+  // MR-1: Client-side markdown renderer
+  // Escapes HTML first (XSS prevention), then renders markdown
+  const MARKED_CONFIG = {
+    breaks: true,
+    gfm: true,
+    headerIds: false,
+    mangle: false
+  };
+
+  function renderMarkdown(text) {
+    if (!text || typeof text !== 'string') return '';
+    // Escape HTML first to prevent XSS
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    // Then parse as markdown
+    try {
+      return marked.parse(escaped, MARKED_CONFIG);
+    } catch (e) {
+      return '<span style="color:red">[Markdown render error]</span>';
+    }
+  }
+
+  // MR-1: Post-process all message bodies to render markdown
+  function renderAllMarkdown() {
+    // Process assistant message bodies
+    document.querySelectorAll('.assistant-message .message-body').forEach(function(el) {
+      const raw = el.getAttribute('data-markdown');
+      if (raw && raw !== '') {
+        el.innerHTML = renderMarkdown(raw);
+      }
+    });
+
+    // Process thinking content
+    document.querySelectorAll('.thinking-content').forEach(function(el) {
+      const raw = el.getAttribute('data-markdown');
+      if (raw && raw !== '') {
+        el.innerHTML = renderMarkdown(raw);
+      }
+    });
+
+    // Process tool result bodies (preview)
+    document.querySelectorAll('.tool-result-message .message-body').forEach(function(el) {
+      const raw = el.getAttribute('data-markdown');
+      if (raw && raw !== '') {
+        el.innerHTML = renderMarkdown(raw);
+      }
+    });
+
+    // Process expanded tool result content
+    document.querySelectorAll('.tool-result-message .message-full pre').forEach(function(el) {
+      const raw = el.getAttribute('data-markdown');
+      if (raw && raw !== '') {
+        el.innerHTML = renderMarkdown(raw);
+      }
+    });
+
+    // Process custom message bodies
+    document.querySelectorAll('.custom-message .message-body').forEach(function(el) {
+      const raw = el.getAttribute('data-markdown');
+      if (raw && raw !== '') {
+        el.innerHTML = renderMarkdown(raw);
+      }
+    });
+
+    // Process expanded custom message content
+    document.querySelectorAll('.custom-message .message-full pre').forEach(function(el) {
+      const raw = el.getAttribute('data-markdown');
+      if (raw && raw !== '') {
+        el.innerHTML = renderMarkdown(raw);
+      }
+    });
+
+    // Process branch summary content
+    document.querySelectorAll('.branch-summary-content').forEach(function(el) {
+      const raw = el.getAttribute('data-markdown');
+      if (raw && raw !== '') {
+        el.innerHTML = renderMarkdown(raw);
+      }
+    });
+
+    // Process compaction summary content
+    document.querySelectorAll('.compaction-summary').forEach(function(el) {
+      const raw = el.getAttribute('data-markdown');
+      if (raw && raw !== '') {
+        el.innerHTML = renderMarkdown(raw);
+      }
+    });
+  }
+
+  // Run markdown rendering after DOM is ready
+  if (typeof marked !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', renderAllMarkdown);
+  }
+
   function toggleExpand(el) {
     const parent = el.parentElement;
     const fullMsg = parent.querySelector('.message-full');
@@ -1063,6 +1353,8 @@ const JS = `
       if (fullMsg.style.display === 'none') {
         fullMsg.style.display = 'block';
         el.textContent = 'Show less';
+        // Render markdown when expanding
+        renderAllMarkdown();
       } else {
         fullMsg.style.display = 'none';
         el.textContent = 'Show full message';
@@ -1078,6 +1370,8 @@ const JS = `
       if (fullText.style.display === 'none') {
         fullText.style.display = 'inline';
         el.textContent = 'Show less';
+        // Render markdown when expanding
+        renderAllMarkdown();
       } else {
         fullText.style.display = 'none';
         el.textContent = 'Show full result';
