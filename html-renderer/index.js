@@ -14,6 +14,7 @@ function buildPage(sessionData, options = {}) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='56' font-size='56' font-family='serif' font-weight='bold' fill='%231976d2'%3Eπ%3C/text%3E%3C/svg%3E" type="image/svg+xml">
   <script src="https://cdn.jsdelivr.net/npm/marked@14.1.0/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/lib/highlight.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github.min.css">
@@ -23,6 +24,7 @@ function buildPage(sessionData, options = {}) {
 </head>
 <body>
   <div class="container">
+    <a href="index.html" class="back-to-index">← Back to Index</a>
     <header class="metadata-header">
       ${buildMetadataCard(sessionData)}
     </header>
@@ -1250,6 +1252,24 @@ const CSS = `
 
   .message-expand:hover {
     text-decoration: underline;
+  }
+
+  /* BI-1: Back to index link */
+  .back-to-index {
+    display: inline-block;
+    margin-bottom: 1rem;
+    padding: 0.35rem 0.75rem;
+    color: #888;
+    text-decoration: none;
+    font-size: 0.82rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .back-to-index:hover {
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   /* CP-1: Copy button styling */

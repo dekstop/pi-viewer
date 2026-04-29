@@ -34,6 +34,7 @@ function generateIndex(sessionList) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pi Sessions — Index</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='56' font-size='56' font-family='serif' font-weight='bold' fill='%231976d2'%3Eπ%3C/text%3E%3C/svg%3E" type="image/svg+xml">
   <style>
     :root {
       --bg: #fafafa;
