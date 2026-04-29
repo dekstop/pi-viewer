@@ -15,6 +15,8 @@ function buildPage(sessionData, options = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <script src="https://cdn.jsdelivr.net/npm/marked@14.1.0/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/lib/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github.min.css">
   <style>
     ${CSS}
   </style>
@@ -956,6 +958,51 @@ const CSS = `
     border-radius: 0;
     font-size: 0.85rem;
   }
+
+  /* SH-1: Syntax highlighting for code blocks */
+  .message-body pre code,
+  .thinking-content pre code,
+  .tool-result-message pre code,
+  .custom-message pre code,
+  .branch-summary-content pre code,
+  .compaction-summary pre code {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .message-body code,
+  .thinking-content code,
+  .tool-result-message code,
+  .custom-message code,
+  .branch-summary-content code,
+  .compaction-summary code {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+  }
+
+  /* highlight.js overrides for message bodies */
+  .message-body .hljs,
+  .thinking-content .hljs,
+  .tool-result-message .hljs,
+  .custom-message .hljs,
+  .branch-summary-content .hljs,
+  .compaction-summary .hljs {
+    background: var(--code-bg) !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 6px !important;
+    overflow-x: auto !important;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    /* highlight.js dark mode */
+    .message-body .hljs,
+    .thinking-content .hljs,
+    .tool-result-message .hljs,
+    .custom-message .hljs,
+    .branch-summary-content .hljs,
+    .compaction-summary .hljs {
+      background: #2d2d44 !important;
+    }
+  }
   
   /* MR-1e: Markdown styles for thinking blocks */
   .thinking-content h1,
@@ -1276,6 +1323,15 @@ const JS = `
     }
   }
 
+  // SH-1: Apply syntax highlighting to code blocks after markdown rendering
+  function highlightCodeBlocks() {
+    if (typeof hljs === 'undefined') return;
+    // Find all pre > code blocks and highlight them
+    document.querySelectorAll('pre code').forEach(function(block) {
+      hljs.highlightElement(block);
+    });
+  }
+
   // MR-1: Post-process all message bodies to render markdown
   function renderAllMarkdown() {
     // Process assistant message bodies
@@ -1341,9 +1397,10 @@ const JS = `
         el.innerHTML = renderMarkdown(raw);
       }
     });
-  }
 
-  // DF-1: Client-side locale-aware timestamp formatter
+    // SH-1: Apply syntax highlighting to code blocks
+    highlightCodeBlocks();
+  }
   // Uses the viewer's system locale for consistent formatting across all machines
   function formatTimestamp(isoString) {
     if (!isoString) return '';
@@ -1396,6 +1453,11 @@ const JS = `
         el.textContent = 'Show full result';
       }
     }
+  }
+
+  // SH-1: Run syntax highlighting when highlight.js is loaded
+  if (typeof hljs !== 'undefined') {
+    hljs.initHighlightingOnLoad();
   }
 `;
 
