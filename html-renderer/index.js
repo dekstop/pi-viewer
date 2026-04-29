@@ -163,6 +163,24 @@ function buildAssistantMessage(msg) {
 
       const badgeId = `tc-${tc.toolCallId || tc.name}-${Math.random().toString(36).slice(2, 8)}`;
 
+      // CDT-1: Check if this is an edit tool call with structured edits
+      const isEdit = (tc.name || '').toLowerCase() === 'edit';
+      let editDataHtml = '';
+      if (isEdit && tc.arguments && typeof tc.arguments === 'string') {
+        try {
+          const parsed = JSON.parse(tc.arguments);
+          if (parsed.path || (parsed.file_path || parsed.filepath || parsed.filename)) {
+            const filePath = parsed.path || parsed.file_path || parsed.filepath || parsed.filename || '';
+            const edits = Array.isArray(parsed.edits) ? parsed.edits : [];
+            const editId = `edit-${tc.toolCallId || tc.name}-${Math.random().toString(36).slice(2, 8)}`;
+            const editsJson = JSON.stringify(edits);
+            editDataHtml = `<span class="edit-diff-trigger" data-edit-id="${editId}" data-edits='${escapeHtml(editsJson)}' data-path='${escapeHtml(String(filePath))}' style="display:none"></span>`;
+          }
+        } catch (e) {
+          // Not valid JSON, ignore
+        }
+      }
+
       // Show result inline if available
       let resultHtml = '';
       if (tc.result) {
@@ -179,7 +197,7 @@ function buildAssistantMessage(msg) {
         }
       }
 
-      return `<span class="tool-call-badge" id="${badgeId}">${icon} ${escapeHtml(tc.name)}${preview ? ` - ${escapeHtml(preview)}...` : ''}${resultHtml}</span>`;
+      return `<span class="tool-call-badge" id="${badgeId}">${icon} ${escapeHtml(tc.name)}${preview ? ` - ${escapeHtml(preview)}...` : ''}${resultHtml}</span>${editDataHtml}`;
     }).join(' ');
 
     parts.push(`<div class="tool-calls">${toolCallHtml}</div>`);
@@ -204,6 +222,7 @@ function buildAssistantMessage(msg) {
     </div>
     <div class="message-body-wrapper">
       ${parts.join('\n')}
+      <div class="edit-diff-container" id="edit-diff-container"></div>
     </div>
   </div>`;
 }
@@ -1652,6 +1671,105 @@ const CSS = `
     text-decoration: underline;
   }
 
+  /* CDT-1: Diff view styling */
+  .edit-diff-container {
+    margin-top: 0.75rem;
+  }
+
+  .edit-diff-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #555;
+    cursor: pointer;
+    margin-top: 0.4rem;
+    transition: background 0.2s;
+  }
+
+  .edit-diff-toggle:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  .edit-diff-toggle .diff-icon {
+    font-size: 0.9rem;
+  }
+
+  .edit-diff-view {
+    margin-top: 0.5rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+  }
+
+  .edit-diff-table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .edit-diff-table td {
+    padding: 0.15rem 0.5rem;
+    vertical-align: top;
+    border: 1px solid var(--border);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .edit-diff-table td:first-child {
+    text-align: right;
+    min-width: 2.5rem;
+    padding-right: 0.5rem;
+    color: #888;
+    user-select: none;
+    font-size: 0.78rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .edit-diff-table td:first-child {
+      color: #666;
+    }
+  }
+
+  .edit-diff-table tr.added td:last-child {
+    background: rgba(46, 125, 50, 0.15);
+    border-left: 2px solid #2e7d32;
+  }
+
+  .edit-diff-table tr.removed td:last-child {
+    background: rgba(211, 47, 47, 0.15);
+    border-left: 2px solid #d32f2f;
+  }
+
+  .edit-diff-table tr.context td:last-child {
+    background: var(--code-bg);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .edit-diff-table tr.added td:last-child {
+      background: rgba(46, 125, 50, 0.25);
+      border-left-color: #66bb6a;
+    }
+    .edit-diff-table tr.removed td:last-child {
+      background: rgba(211, 47, 47, 0.25);
+      border-left-color: #ef5350;
+    }
+  }
+
+  .edit-diff-path {
+    font-size: 0.78rem;
+    color: #888;
+    margin-bottom: 0.3rem;
+    font-family: monospace;
+  }
+
   @media (max-width: 600px) {
     .content {
       flex-direction: column;
@@ -2006,6 +2124,176 @@ const JS = `
         }
       });
     });
+  });
+
+  // CDT-1: Diff view for edit tool calls
+  function escapeHtmlForDiff(text) {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Lightweight line-based diff (Myers' algorithm simplified)
+  function computeDiff(oldText, newText) {
+    var oldLines = oldText.split('\n');
+    var newLines = newText.split('\n');
+    var oldLen = oldLines.length;
+    var newLen = newLines.length;
+
+    // LCS (Longest Common Subsequence) via dynamic programming
+    // For performance, limit to 200 lines
+    var maxLines = Math.min(oldLen, newLen, 200);
+    var dp = [];
+    for (var i = 0; i <= maxLines; i++) {
+      dp[i] = [];
+      for (var j = 0; j <= maxLines; j++) {
+        dp[i][j] = 0;
+      }
+    }
+
+    for (var i = 1; i <= maxLines; i++) {
+      for (var j = 1; j <= maxLines; j++) {
+        if (oldLines[i - 1] === newLines[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    // Backtrack to find diff
+    var result = [];
+    var i = maxLines;
+    var j = maxLines;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+        result.unshift({ type: 'context', oldLine: i, newLine: j, text: oldLines[i - 1] });
+        i--;
+        j--;
+      } else if (i > 0 && (j === 0 || (dp[i - 1][j] >= dp[i][j - 1]))) {
+        result.unshift({ type: 'removed', oldLine: i, text: oldLines[i - 1] });
+        i--;
+      } else {
+        result.unshift({ type: 'added', newLine: j, text: newLines[j - 1] });
+        j--;
+      }
+    }
+
+    // Add any remaining lines
+    while (i > 0) {
+      result.unshift({ type: 'removed', oldLine: i, text: oldLines[i - 1] });
+      i--;
+    }
+    while (j > 0) {
+      result.unshift({ type: 'added', newLine: j, text: newLines[j - 1] });
+      j--;
+    }
+
+    return result;
+  }
+
+  // Build HTML for a single diff
+  function buildDiffHtml(edits) {
+    if (!edits || edits.length === 0) return '';
+
+    var html = '';
+    for (var e = 0; e < edits.length; e++) {
+      var edit = edits[e];
+      var oldText = edit.oldText || '';
+      var newText = edit.newText || '';
+
+      if (!oldText && !newText) continue;
+
+      var diff = computeDiff(oldText, newText);
+      var diffId = 'diff-' + Math.random().toString(36).slice(2, 10);
+
+      var addedCount = 0;
+      var removedCount = 0;
+      for (var d = 0; d < diff.length; d++) {
+        if (diff[d].type === 'added') addedCount++;
+        if (diff[d].type === 'removed') removedCount++;
+      }
+
+      var rowClass = addedCount > 0 ? 'added' : removedCount > 0 ? 'removed' : '';
+      var badge = addedCount > 0 ? '🟢+' + addedCount : '';
+      badge += removedCount > 0 ? ' 🔴-' + removedCount : '';
+
+      html += '<div class="edit-diff-view" id="' + diffId + '">';
+      html += '<table class="edit-diff-table">';
+
+      var oldLineNum = 0;
+      var newLineNum = 0;
+
+      for (var d = 0; d < diff.length; d++) {
+        var line = diff[d];
+        if (line.type === 'context') {
+          oldLineNum = line.oldLine;
+          newLineNum = line.newLine;
+          html += '<tr class="context"><td>' + oldLineNum + '</td><td>' + escapeHtmlForDiff(line.text) + '</td></tr>';
+        } else if (line.type === 'removed') {
+          oldLineNum = line.oldLine;
+          newLineNum++;
+          html += '<tr class="removed"><td>' + oldLineNum + '</td><td>' + escapeHtmlForDiff(line.text) + '</td></tr>';
+        } else if (line.type === 'added') {
+          oldLineNum++;
+          newLineNum = line.newLine;
+          html += '<tr class="added"><td>' + newLineNum + '</td><td>' + escapeHtmlForDiff(line.text) + '</td></tr>';
+        }
+      }
+
+      html += '</table></div>';
+    }
+
+    return html;
+  }
+
+  // Render edit diffs when triggers are found
+  function renderEditDiffs() {
+    var triggers = document.querySelectorAll('.edit-diff-trigger');
+    var container = document.getElementById('edit-diff-container');
+    if (!container) return;
+
+    // Clear previous diffs
+    container.innerHTML = '';
+
+    for (var t = 0; t < triggers.length; t++) {
+      var trigger = triggers[t];
+      var edits = JSON.parse(trigger.dataset.edits);
+      var path = trigger.dataset.path;
+
+      // Create toggle button
+      var toggleBtn = document.createElement('div');
+      toggleBtn.className = 'edit-diff-toggle';
+      toggleBtn.innerHTML = '<span class="diff-icon">🔧</span> Edit: ' + escapeHtmlForDiff(path) + (edits.length > 1 ? ' (' + edits.length + ' edits)' : '') + ' <span class="diff-icon">▼</span>';
+
+      // Create diff view container (hidden initially)
+      var diffView = document.createElement('div');
+      diffView.className = 'edit-diff-view';
+      diffView.style.display = 'none';
+
+      toggleBtn.addEventListener('click', function() {
+        if (diffView.style.display === 'none') {
+          diffView.innerHTML = buildDiffHtml(edits);
+          diffView.style.display = 'block';
+          toggleBtn.querySelector('.diff-icon:last-child').textContent = '▲';
+        } else {
+          diffView.style.display = 'none';
+          toggleBtn.querySelector('.diff-icon:last-child').textContent = '▼';
+        }
+      });
+
+      container.appendChild(toggleBtn);
+      container.appendChild(diffView);
+    }
+  }
+
+  // Wire up edit diff triggers
+  document.addEventListener('DOMContentLoaded', function() {
+    renderEditDiffs();
   });
 `;
 

@@ -307,8 +307,15 @@
 
 ### CDT-1: Diff View for Edit Tool Calls
 - **What**: Show unified diff view for `edit` tool calls (what changed in the file).
-- **Considerations**: Requires comparing before/after file content. May not be available in tool call arguments alone.
-- **Status**: Defer — needs more investigation into edit tool data.
+- **Status**: ✅ Done
+- **Implementation**: 
+  - Server-side: Extract structured edit data (path, oldText, newText) from tool call arguments
+  - Client-side: Lightweight LCS-based line diff algorithm (~60 lines)
+  - Collapsible diff toggle button per edit showing green (added) / red (removed) lines with line numbers
+  - Supports multiple edits per tool call
+  - Dark mode aware styling
+- **Files affected**: `html-renderer/index.js` (CSS + JS diff rendering)
+- **Done**: 2026-04-29
 
 ---
 
