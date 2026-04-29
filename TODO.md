@@ -213,6 +213,7 @@
   - [ ] **TF-1a**: Add tool-type-aware argument formatting for read/write/edit/bash
   - [ ] **TF-1b**: Handle JSON argument parsing with graceful fallback
   - [ ] **TF-1c**: Update tool call badge styling to accommodate formatted arguments
+- **Status**: Pending
 
 ---
 
@@ -230,6 +231,7 @@
   - [ ] **ST-1b**: Build recursive tree HTML with navigation links to siblings
   - [ ] **ST-1c**: Highlight current session in tree
   - [ ] **ST-1d**: Depth limiting with "..." indicators
+- **Status**: Pending
 
 ---
 
@@ -246,6 +248,7 @@
   - [ ] **TD-1a**: Calculate inter-message durations in `buildSessionData()`
   - [ ] **TD-1b**: Attach duration to thinking blocks in enriched message data
   - [ ] **TD-1c**: Display duration in thinking block summary line
+- **Status**: Pending
 
 ---
 
@@ -255,23 +258,27 @@
 - **What**: Add a favicon or title icon to generated HTML files (index and session pages).
 - **Implementation**:
   - Inline SVG favicon as data URI in `<link rel="icon">`.
-  - Simple icon: a stylised "π" symbol or a chat/document icon.
+  - Simple icon: a stylised "π" symbol.
   - **Key consideration**: Must be self-contained (inline data URI, no external files).
 - **Sub-tasks**:
-  - [ ] **FC-1a**: Create inline SVG favicon (data URI)
-  - [ ] **FC-1b**: Add to index.html and session page templates
+  - [x] **FC-1a**: Create inline SVG favicon (data URI)
+  - [x] **FC-1b**: Add to index.html and session page templates
+- **Done**: 2026-04-29
+- **Implementation notes**: SVG π symbol as inline data URI. Works in all modern browsers.
 
 ---
 
 ### BI-1: Back to Index Link
 - **What**: Add a navigation link back to the index from each session page.
 - **Implementation**:
-  - Add a link at the top or bottom of session pages: `← Back to Session Index`.
+  - Add a link at the top of session pages: `← Back to Index`.
   - Link to `index.html` (same directory).
   - Style as a subtle navigation element, not prominent.
 - **Sub-tasks**:
-  - [ ] **BI-1a**: Add back-to-index link to session page template
-  - [ ] **BI-1b**: Style as subtle navigation element
+  - [x] **BI-1a**: Add back-to-index link to session page template
+  - [x] **BI-1b**: Style as subtle navigation element
+- **Done**: 2026-04-29
+- **Implementation notes**: Link placed above metadata card. Subtle bordered design with hover effects.
 
 ---
 

@@ -5,8 +5,11 @@
  * Generate a full HTML document with inline CSS, inline JS, metadata header, conversation body.
  */
 function buildPage(sessionData, options = {}) {
-  const { title: pageTitle } = options;
+  const { title: pageTitle, treeData } = options;
   const title = pageTitle || `${sessionData.title} - Pi Session`;
+
+  // ST-1: Attach tree data to sessionData for the renderer
+  sessionData._treeData = treeData || null;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -338,27 +341,51 @@ function buildMetadataCard(sessionData) {
 }
 
 /**
- * HR-4: Session tree renderer
- * Show parent-child session tree.
+ * HR-4 / ST-1: Session tree renderer
+ * Show full parent-child session tree with navigation links.
  */
 function buildSessionTree(sessionData) {
-  if (!sessionData.parentSessionId) {
+  if (!sessionData.parentSessionId && !sessionData._treeData) {
+    return '';
+  }
+
+  const treeHtml = renderTree(sessionData._treeData || null, sessionData.sessionId);
+  
+  if (!treeHtml) {
     return '';
   }
 
   return `<div class="session-tree">
     <h3>Session Tree</h3>
-    <ul class="tree-root">
-      <li class="tree-node">
-        <span class="tree-label">📂 ${escapeHtml(sessionData.parentSessionId.substring(0, 16))}...</span>
-        <ul>
-          <li class="tree-node tree-current">
-            <span class="tree-label tree-label-current">📂 This Session</span>
-          </li>
-        </ul>
-      </li>
-    </ul>
+    ${treeHtml}
   </div>`;
+}
+
+/**
+ * ST-1b: Recursively render tree nodes with links.
+ */
+function renderTree(node, currentId) {
+  if (!node) return '';
+  
+  const isCurrent = node.id === currentId;
+  const classes = ['tree-node' + (isCurrent ? ' tree-current' : '')];
+  const labelClass = isCurrent ? 'tree-label-current' : 'tree-label';
+  const prefix = isCurrent ? '📂' : '📁';
+  const idPreview = escapeHtml(node.id.substring(0, 16)) + (node.id.length > 16 ? '...' : '');
+  
+  let html = `<li class="${classes.join(' ')}">`;
+  html += `<span class="${labelClass}">${prefix} ${idPreview}</span>`;
+  
+  if (node.children && node.children.length > 0) {
+    html += '<ul>';
+    for (const child of node.children) {
+      html += renderTree(child, currentId);
+    }
+    html += '</ul>';
+  }
+  
+  html += '</li>';
+  return html;
 }
 
 /**

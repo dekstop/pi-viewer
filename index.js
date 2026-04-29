@@ -63,27 +63,109 @@ function main() {
     }
   }
 
-  // Generate HTML files for each session
-  console.log(`\n🎨 Generating HTML files...`);
-  for (const session of sessions) {
-    const fileName = path.basename(session.filePath, '.jsonl') + '.html';
-    const html = buildPage(session.data, { title: session.data.title });
-    const outputPath = path.join(outputDir, fileName);
-    fs.writeFileSync(outputPath, html, 'utf-8');
-    console.log(`  ✅ ${fileName}`);
-  }
-
   // Build session tree relationships (check for children)
   const sessionIds = new Set(sessions.map(s => s.data.sessionId));
   const childMap = new Map();
   
   for (const session of sessions) {
-    if (session.data.parentSessionId && sessionIds.has(session.data.parentSessionId)) {
-      if (!childMap.has(session.data.parentSessionId)) {
-        childMap.set(session.data.parentSessionId, []);
+    let parentId = session.data.parentSessionId;
+    // Extract session ID from full path if needed (e.g., "/home/.../sessions/2026-..._uuid.jsonl")
+    if (parentId && parentId.includes('.jsonl')) {
+      const match = parentId.match(/_(.+?)\.jsonl$/);
+      if (match) {
+        parentId = match[1];
       }
-      childMap.get(session.data.parentSessionId).push(session.data.sessionId);
     }
+    if (parentId && sessionIds.has(parentId)) {
+      if (!childMap.has(parentId)) {
+        childMap.set(parentId, []);
+      }
+      childMap.get(parentId).push(session.data.sessionId);
+    }
+  }
+
+  // ST-1: Build full tree structure for each session (grandparent → parent → children → grandchildren)
+  function buildTree(sessionId, depth = 0, maxDepth = 3) {
+    const node = {
+      id: sessionId,
+      children: [],
+      isCurrent: false
+    };
+    
+    if (depth < maxDepth && childMap.has(sessionId)) {
+      for (const childId of childMap.get(sessionId)) {
+        const childNode = buildTree(childId, depth + 1, maxDepth);
+        node.children.push(childNode);
+      }
+    }
+    
+    return node;
+  }
+
+  // Generate HTML files for each session
+  console.log(`\n🎨 Generating HTML files...`);
+  for (const session of sessions) {
+    const fileName = path.basename(session.filePath, '.jsonl') + '.html';
+    
+    // ST-1: Build the full tree starting from root ancestors
+    let treeData = null;
+    let currentId = session.data.sessionId;
+    const ancestors = [];
+    
+    // Walk up to find root ancestor
+    while (true) {
+      const parentSession = sessions.find(s => s.data.sessionId === currentId);
+      if (!parentSession || !parentSession.data.parentSessionId) {
+        break;
+      }
+      let parentId = parentSession.data.parentSessionId;
+      // Extract session ID from full path if needed
+      if (parentId && parentId.includes('.jsonl')) {
+        const match = parentId.match(/_(.+?)\.jsonl$/);
+        if (match) {
+          parentId = match[1];
+        }
+      }
+      if (!sessionIds.has(parentId)) {
+        break;
+      }
+      ancestors.push(parentId);
+      currentId = parentId;
+    }
+    
+    // Build tree from root
+    if (ancestors.length > 0) {
+      // Build up from root
+      let rootId = ancestors[ancestors.length - 1];
+      let tree = buildTree(rootId, 0, 3);
+      
+      // Mark current session in tree
+      function markCurrent(node, targetId) {
+        if (node.id === targetId) {
+          node.isCurrent = true;
+          return true;
+        }
+        for (const child of node.children) {
+          if (markCurrent(child, targetId)) {
+            // Mark ancestors too
+            child.isCurrent = true;
+            return true;
+          }
+        }
+        return false;
+      }
+      markCurrent(tree, session.data.sessionId);
+      treeData = tree;
+    } else if (childMap.has(session.data.sessionId)) {
+      // This session has children but no parent in our set
+      treeData = buildTree(session.data.sessionId, 0, 3);
+      treeData.isCurrent = true;
+    }
+    
+    const html = buildPage(session.data, { title: session.data.title, treeData });
+    const outputPath = path.join(outputDir, fileName);
+    fs.writeFileSync(outputPath, html, 'utf-8');
+    console.log(`  ✅ ${fileName}`);
   }
 
   // Generate index.html
