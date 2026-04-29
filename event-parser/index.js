@@ -278,6 +278,42 @@ function buildSessionData(events) {
     return '';
   }
 
+  // TD-1: Calculate inter-message durations for thinking block timing
+  // Collect all assistant messages in chronological order
+  const allAssistantMessages = [];
+  for (const turn of turns) {
+    for (const a of (turn.assistant || [])) {
+      allAssistantMessages.push({ ...a, turnIndex: turns.indexOf(turn) });
+    }
+  }
+  allAssistantMessages.sort((a, b) => {
+    const tsA = a.timestamp || 0;
+    const tsB = b.timestamp || 0;
+    return tsA - tsB;
+  });
+
+  // Helper to get timestamp in ms
+  function getTimestampMs(ts) {
+    if (!ts) return 0;
+    return typeof ts === 'string' ? new Date(ts).getTime() : Number(ts);
+  }
+
+  // Calculate duration from previous assistant message to current one
+  const durationMap = new Map();
+  for (let i = 0; i < allAssistantMessages.length; i++) {
+    const current = allAssistantMessages[i];
+    const prev = i > 0 ? allAssistantMessages[i - 1] : null;
+    if (prev) {
+      const currentMs = getTimestampMs(current.timestamp);
+      const prevMs = getTimestampMs(prev.timestamp);
+      if (currentMs > 0 && prevMs > 0) {
+        const durationMs = currentMs - prevMs;
+        const durationSec = Math.round(durationMs / 1000);
+        durationMap.set(current.id, durationSec);
+      }
+    }
+  }
+
   const enrichedTurns = turns.map(turn => {
     const enrichedUser = turn.user ? { ...parseMessageContent(turn.user), id: turn.user.id, timestamp: turn.user.timestamp, role: turn.user.message?.role || turn.user.role } : null;
     const enrichedAssistant = turn.assistant.map(a => {
@@ -308,6 +344,9 @@ function buildSessionData(events) {
         return { ...tc, result: resultSummary };
       });
 
+      // TD-1: Attach thinking duration
+      const thinkingDuration = durationMap.get(a.id);
+
       return {
         ...parsed,
         toolCalls: enrichedToolCalls,
@@ -317,7 +356,8 @@ function buildSessionData(events) {
         model: a.message?.model || '',
         usage: usage,
         stopReason: a.message?.stopReason || null,
-        errorMessage: a.message?.errorMessage || null
+        errorMessage: a.message?.errorMessage || null,
+        thinkingDuration: thinkingDuration || null
       };
     });
 

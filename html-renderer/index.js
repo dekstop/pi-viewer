@@ -139,8 +139,12 @@ function buildAssistantMessage(msg) {
   // Thinking block (collapsible, MR-1: markdown rendering)
   if (thinking && thinking.length > 0) {
     const thinkingText = thinking.join('\n');
+    // TD-1: Show thinking duration if available
+    const durationHtml = msg.thinkingDuration !== null && msg.thinkingDuration > 0
+      ? `<span class="thinking-duration">(${msg.thinkingDuration}s)</span>`
+      : '';
     parts.push(`<details class="thinking-block">
-      <summary>💭 Thinking <button class="copy-btn" data-copy-text="${escapeHtml(thinkingText).replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" title="Copy thinking">📋</button></summary>
+      <summary>💭 Thinking ${durationHtml} <button class="copy-btn" data-copy-text="${escapeHtml(thinkingText).replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" title="Copy thinking">📋</button></summary>
       <div class="thinking-content" data-markdown="${escapeHtml(thinkingText)}"></div>
     </details>`);
   }
@@ -1402,6 +1406,20 @@ const CSS = `
     cursor: pointer;
     font-size: 0.85rem;
     color: #888;
+  }
+
+  /* TD-1: Thinking duration badge */
+  .thinking-duration {
+    color: #9e9e9e;
+    font-size: 0.78rem;
+    font-family: monospace;
+    margin-left: 0.25rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .thinking-duration {
+      color: #b0b0b0;
+    }
   }
 
   .thinking-content {
