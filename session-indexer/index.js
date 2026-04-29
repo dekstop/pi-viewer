@@ -229,12 +229,121 @@ function generateIndex(sessionList) {
       padding: 2rem;
       text-align: center;
     }
+
+    /* SR-4: Search and filter controls */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      padding: 0.75rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      align-items: center;
+    }
+    .filter-bar input[type="text"],
+    .filter-bar input[type="number"],
+    .filter-bar select {
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.85rem;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+    }
+    .filter-bar input[type="text"]:focus,
+    .filter-bar input[type="number"]:focus,
+    .filter-bar select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+    }
+    .filter-bar input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+    }
+    .filter-bar input[type="number"] {
+      width: 70px;
+    }
+    .filter-bar label {
+      font-size: 0.78rem;
+      color: #888;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      align-items: flex-start;
+    }
+    .filter-bar .filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    .filter-bar .filter-divider {
+      width: 1px;
+      height: 2rem;
+      background: var(--border);
+      margin: 0 0.25rem;
+    }
+    .filter-bar .btn-reset {
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .filter-bar .btn-reset:hover {
+      background: var(--code-bg);
+    }
+    .filter-count {
+      font-size: 0.82rem;
+      color: #888;
+      margin-bottom: 0.5rem;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .filter-bar {
+        background: #2d2d44;
+      }
+      .filter-bar .btn-reset:hover {
+        background: #3a3a5e;
+      }
+    }
   </style>
 </head>
 <body>
   <h1>Pi Sessions</h1>
   <p class="subtitle">Total sessions: ${sessionList.length}</p>
-  <div class="sessions-grid">
+  <div class="filter-bar" id="filter-bar">
+    <input type="text" id="search-input" placeholder="Search sessions by title, prompt, or ID…" autocomplete="off" />
+    <div class="filter-divider"></div>
+    <div class="filter-group">
+      <label>
+        Model
+        <select id="model-filter">
+          <option value="">All models</option>
+          ${[...new Set(sessionList.map(s => s.model).filter(Boolean))].map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('\n')}
+        </select>
+      </label>
+    </div>
+    <div class="filter-divider"></div>
+    <div class="filter-group">
+      <label>
+        Min turns
+        <input type="number" id="min-turns" min="0" placeholder="0" />
+      </label>
+      <label>
+        Max turns
+        <input type="number" id="max-turns" min="0" placeholder="∞" />
+      </label>
+    </div>
+    <button class="btn-reset" id="reset-filters">Reset</button>
+  </div>
+  <div class="filter-count" id="filter-count"></div>
+  <div class="sessions-grid" id="sessions-grid">
 ${sorted.map((session, idx) => {
     const hasChildren = session.hasChildren;
     const childrenIcon = hasChildren ? '▶ ' : '';
@@ -244,7 +353,8 @@ ${sorted.map((session, idx) => {
     const showDayMarker = (idx === 0 || sorted[idx - 1].dayKey !== session.dayKey);
     const dayMarker = showDayMarker && session.dayKey ? `<div class="day-marker">${escapeHtml(session.dayKey)}</div>` : '';
     
-    return `<div class="session-card">
+    const totalTurns = (session.userCount || 0) + (session.assistantCount || 0);
+    return `<div class="session-card" data-search-text="${escapeHtml(session.title || '').replace(/"/g, '&quot;')} ${escapeHtml(promptExcerpt || '').replace(/"/g, '&quot;')} ${escapeHtml(session.sessionId || '').replace(/"/g, '&quot;')}" data-model="${escapeHtml(session.model || '').replace(/"/g, '&quot;')}" data-turns="${totalTurns}">
 ${dayMarker}
       <div class="card-header">
         <span class="tree-indicator" style="flex-shrink:0">${childrenIcon}</span>
@@ -267,6 +377,68 @@ ${dayMarker}
     </div>`;
   }).join('\n')}
   </div>
+  <script>
+    // SR-4: Client-side search and filter for index page
+    function applyFilters() {
+      var searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
+      var modelFilter = document.getElementById('model-filter').value;
+      var minTurns = parseInt(document.getElementById('min-turns').value) || 0;
+      var maxTurns = parseInt(document.getElementById('max-turns').value) || Infinity;
+      var cards = document.querySelectorAll('.session-card');
+      var visibleCount = 0;
+
+      cards.forEach(function(card) {
+        var searchText = (card.dataset.searchText || '').toLowerCase();
+        var cardModel = (card.dataset.model || '').toLowerCase();
+        var turns = parseInt(card.dataset.turns) || 0;
+
+        var matchesSearch = !searchQuery || searchText.includes(searchQuery);
+        var matchesModel = !modelFilter || cardModel === modelFilter.toLowerCase();
+        var matchesTurns = turns >= minTurns && turns <= maxTurns;
+
+        if (matchesSearch && matchesModel && matchesTurns) {
+          card.style.display = '';
+          visibleCount++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      var countEl = document.getElementById('filter-count');
+      if (countEl) {
+        countEl.textContent = visibleCount + ' session' + (visibleCount !== 1 ? 's' : '') + ' found';
+      }
+    }
+
+    // Wire up filter controls
+    document.addEventListener('DOMContentLoaded', function() {
+      var searchInput = document.getElementById('search-input');
+      if (searchInput) searchInput.addEventListener('input', applyFilters);
+
+      var modelFilter = document.getElementById('model-filter');
+      if (modelFilter) modelFilter.addEventListener('change', applyFilters);
+
+      var minTurns = document.getElementById('min-turns');
+      if (minTurns) minTurns.addEventListener('input', applyFilters);
+
+      var maxTurns = document.getElementById('max-turns');
+      if (maxTurns) maxTurns.addEventListener('input', applyFilters);
+
+      var resetBtn = document.getElementById('reset-filters');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+          if (searchInput) searchInput.value = '';
+          if (modelFilter) modelFilter.value = '';
+          if (minTurns) minTurns.value = '';
+          if (maxTurns) maxTurns.value = '';
+          applyFilters();
+        });
+      }
+
+      // Initial filter application
+      applyFilters();
+    });
+  </script>
 </body>
 </html>`;
 
