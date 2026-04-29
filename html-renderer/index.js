@@ -523,11 +523,13 @@ function getToolCallIcon(name) {
 }
 
 /**
- * Helper: Format Unix timestamp to readable date.
+ * DF-1a: Format Unix timestamp to ISO string for client-side locale-aware formatting.
+ * The actual formatting is done in the generated HTML via JS to respect the viewer's locale.
  */
 function formatTimestamp(ts) {
+  if (!ts) return '';
   const d = new Date(ts);
-  return d.toLocaleString();
+  return d.toISOString();
 }
 
 /**
@@ -1338,6 +1340,23 @@ const JS = `
       if (raw && raw !== '') {
         el.innerHTML = renderMarkdown(raw);
       }
+    });
+  }
+
+  // DF-1: Client-side locale-aware timestamp formatter
+  // Uses the viewer's system locale for consistent formatting across all machines
+  function formatTimestamp(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit'
+    }) + ', ' + d.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
     });
   }
 

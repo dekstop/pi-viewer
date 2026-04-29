@@ -145,4 +145,5 @@ pi-viewer-test/
 .DS_Store
 output-test
 AGENTS.md
-./output
+output/
+

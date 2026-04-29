@@ -179,10 +179,10 @@
   - **Key consideration**: Generated HTML is standalone and viewed on different machines. Best approach: use client-side `toLocaleDateString(undefined)` and `toLocaleTimeString(undefined)` in the generated page's inline JS — this picks up the viewer's locale automatically, rather than the builder's locale.
   - **Key consideration**: If server-side formatting is preferred (format at generation time), read `Intl.NumberFormat.prototype.resolvedOptions()` to detect the current locale and pass it through consistently.
 - **Sub-tasks**:
-  - [ ] **DF-1a**: Update `formatTimestamp()` helper in html-renderer to use locale-aware formatting
-  - [ ] **DF-1b**: Update date formatters in index.js to use locale-aware formatting
-  - [ ] **DF-1c**: Apply consistent formatting to all timestamp displays (message headers, tool results, compaction details, branch summaries)
-  - [ ] **DF-1d**: Decide approach: client-side locale detection in generated HTML vs. server-side formatting at build time
+  - [x] **DF-1a**: Update `formatTimestamp()` helper in html-renderer to use locale-aware formatting
+  - [x] **DF-1b**: Update date formatters in index.js to use locale-aware formatting
+  - [x] **DF-1c**: Apply consistent formatting to all timestamp displays (message headers, tool results, compaction details, branch summaries)
+  - [x] **DF-1d**: Decide approach: client-side locale detection in generated HTML vs. server-side formatting at build time
 
 ---
 
