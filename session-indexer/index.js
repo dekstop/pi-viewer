@@ -15,6 +15,18 @@ function generateIndex(sessionList) {
     return tsB.localeCompare(tsA);
   });
 
+  // Group sessions by day for section markers
+  const dayGroups = new Map();
+  const dayOrder = [];
+  for (const session of sorted) {
+    const day = session.dayKey || session.date;
+    if (!dayGroups.has(day)) {
+      dayGroups.set(day, []);
+      dayOrder.push(day);
+    }
+    dayGroups.get(day).push(session);
+  }
+
   // Build HTML
   let html = `<!DOCTYPE html>
 <html lang="en">
@@ -71,11 +83,11 @@ function generateIndex(sessionList) {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 1rem 1.15rem;
+      padding: 1rem 1.15rem 0.85rem;
       transition: box-shadow 0.15s, border-color 0.15s;
       display: flex;
       flex-direction: column;
-      gap: 0.6rem;
+      gap: 0.55rem;
     }
     .session-card:hover {
       border-color: var(--accent);
@@ -107,27 +119,47 @@ function generateIndex(sessionList) {
       white-space: nowrap;
     }
     .card-dir {
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       color: #888;
       background: var(--border);
       border-radius: 3px;
-      padding: 0.15rem 0.45rem;
+      padding: 0.12rem 0.4rem;
       display: inline-block;
       max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .card-preview {
+
+    .day-marker {
       font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--accent);
+      padding: 0.25rem 0.6rem;
+      margin-bottom: 0.3rem;
+      border-bottom: 2px solid var(--accent);
+      display: inline-block;
+      max-width: 100%;
+      border-radius: 4px 4px 0 0;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .day-marker {
+        border-color: var(--accent);
+      }
+    }
+    .card-preview {
+      font-size: 0.88rem;
       color: var(--user-color);
       background: var(--card-bg);
       border-left: 3px solid var(--user-color);
-      padding: 0.4rem 0.6rem;
+      padding: 0.5rem 0.65rem;
       border-radius: 0 4px 4px 0;
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
     .card-meta {
       display: flex;
@@ -203,24 +235,26 @@ function generateIndex(sessionList) {
   <h1>Pi Sessions</h1>
   <p class="subtitle">Total sessions: ${sessionList.length}</p>
   <div class="sessions-grid">
-${sorted.map(session => {
+${sorted.map((session, idx) => {
     const hasChildren = session.hasChildren;
     const childrenIcon = hasChildren ? '▶ ' : '';
-    const preview = escapeHtml(session.firstUserPrompt || '');
-    const previewClass = session.firstUserPrompt ? 'card-preview' : '';
-    const previewText = preview.length > 120 ? preview.substring(0, 120) + '…' : preview;
-    const dirText = escapeHtml(session.directory || '');
+    const promptExcerpt = session.promptExcerpt || session.firstUserPrompt || '';
+    const promptHtml = escapeHtml(promptExcerpt);
+    const dirText = escapeHtml(session.abbreviatedDir || '');
+    const showDayMarker = (idx === 0 || sorted[idx - 1].dayKey !== session.dayKey);
+    const dayMarker = showDayMarker && session.dayKey ? `<div class="day-marker">${escapeHtml(session.dayKey)}</div>` : '';
     
-    return `    <div class="session-card">
+    return `<div class="session-card">
+${dayMarker}
       <div class="card-header">
         <span class="tree-indicator" style="flex-shrink:0">${childrenIcon}</span>
         <a href="${session.link}">
           <div class="card-title">${escapeHtml(session.title || session.sessionId)}</div>
         </a>
-        <span class="card-date" title="${session.date || ''}">${session.dateFull || ''}</span>
+        <span class="card-date" title="${session.dateFull || ''}">${session.date || ''}</span>
       </div>
       <div class="card-dir" title="${dirText}">${dirText}</div>
-      <div class="${previewClass}">${previewText}</div>
+      <div class="card-preview">${promptHtml}</div>
       <div class="card-meta">
         <span class="badge badge-user" title="User messages">👤 ${session.userCount || 0}</span>
         <span class="badge badge-assistant" title="Assistant messages">💬 ${session.assistantCount || 0}</span>

@@ -90,26 +90,31 @@ function main() {
   console.log(`\n📑 Generating index.html...`);
   const entries = parseSessionEntries(sessions.map(s => s.filePath));
   
-  // British date formatter: DD/MM/YYYY
+  // Day-of-week abbreviations
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // British date formatter with weekday: DDD DD/MM/YYYY
   function toBritishDate(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
+    const dayName = dayNames[d.getDay()];
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
+    return `${dayName} ${day}/${month}/${year}`;
   }
 
-  // British date+time formatter: DD/MM/YYYY HH:mm
+  // British date+time formatter: DDD DD/MM/YYYY HH:mm
   function toBritishDateFull(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
+    const dayName = dayNames[d.getDay()];
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
     const hours = String(d.getHours()).padStart(2, '0');
     const minutes = String(d.getMinutes()).padStart(2, '0');
-    return `${day}/${month}/${year} ${hours}:${minutes}`;
+    return `${dayName} ${day}/${month}/${year} ${hours}:${minutes}`;
   }
 
   // Enrich entries with session data and tree info
@@ -134,6 +139,33 @@ function main() {
       // NEP-3: Count branch summaries
       const branchSummaryCount = session.data.branchSummaryEntries?.length || 0;
 
+      // Abbreviate directory to final path component only
+      // Handle both normal paths (/) and encoded paths (--component-separator--)
+      let abbreviatedDir = '';
+      const rawDir = session.directory || entry.directory;
+      // First extract the last path component
+      const lastComponent = rawDir.split('/').pop() || '';
+      if (lastComponent.startsWith('--') && lastComponent.endsWith('--')) {
+        // Encoded path format: --home-mongo.guest-Users-mongo-Code-2026-pi-viewer--
+        const inner = lastComponent.slice(2, -2);
+        const parts = inner.split('-');
+        // Filter empty parts and take the last meaningful component
+        const filtered = parts.filter(p => p);
+        abbreviatedDir = filtered[filtered.length - 1] || '';
+      } else {
+        // Normal path format
+        abbreviatedDir = lastComponent;
+      }
+
+      // Extract a meaningful prompt excerpt (longer, multi-line friendly)
+      const promptLines = firstUserPrompt.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      let promptExcerpt = '';
+      for (const line of promptLines) {
+        if ((promptExcerpt + '\n' + line).length > 300) break;
+        promptExcerpt = promptExcerpt ? promptExcerpt + '\n' + line : line;
+        if (promptExcerpt.length >= 200) break;
+      }
+
       return {
         ...entry,
         sessionId: session.data.sessionId,
@@ -141,16 +173,19 @@ function main() {
         timestamp: session.data.timestamp,
         date: toBritishDate(session.data.timestamp),
         dateFull: toBritishDateFull(session.data.timestamp),
+        dayKey: toBritishDate(session.data.timestamp),
         model: session.data.currentModel ? `${session.data.currentModel.provider || ''} / ${session.data.currentModel.model || ''}` : '',
         hasChildren,
         firstUserPrompt,
+        promptExcerpt,
         userCount,
         assistantCount,
         toolCallCount,
         thinkingCount,
         resultCount,
         branchSummaryCount,
-        directory: session.directory || entry.directory
+        directory: session.directory || entry.directory,
+        abbreviatedDir
       };
     }
     return entry;
