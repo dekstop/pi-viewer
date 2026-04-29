@@ -73,9 +73,11 @@
   - **Key consideration**: Target size — the generated HTML files already contain substantial inline CSS/JS. Total inline additions should stay under ~30KB to keep files manageable.
   - Files affected: `html-renderer/index.js` (add highlighter, register with markdown renderer).
 - **Sub-tasks**:
-  - [ ] **SH-1a**: Choose and embed syntax highlighter
-  - [ ] **SH-1b**: Register highlighter with markdown renderer (render hook or post-process `<pre><code>` blocks)
-  - [ ] **SH-1c**: Add CSS for highlighted tokens (dark mode aware)
+  - [x] **SH-1a**: Choose and embed syntax highlighter (highlight.js v11.10.0 via CDN)
+  - [x] **SH-1b**: Register highlighter with markdown renderer (post-process `<pre><code>` blocks)
+  - [x] **SH-1c**: Add CSS for highlighted tokens (dark mode aware)
+- **Done**: 2026-04-29
+- **Implementation notes**: Uses `highlight.js` from CDN (v11.10.0). Post-processes code blocks after markdown rendering. Dark mode aware with separate color definitions.
 
 ---
 
@@ -92,12 +94,14 @@
   - **Key consideration**: Performance — avoid DOM mutation on every keystroke. Use debounce (250ms) and batch DOM updates.
   - Files affected: `html-renderer/index.js` (add search bar HTML, CSS, JS).
 - **Sub-tasks**:
-  - [ ] **SR-3a**: Add search input field and styling
-  - [ ] **SR-3b**: Index all visible text content on page load
-  - [ ] **SR-3c**: Implement match highlighting (wrap in `<mark>` or use scroll-into-view)
-  - [ ] **SR-3d**: Add match count display and prev/next navigation
-  - [ ] **SR-3e**: Handle collapsed content (expand to show matches)
-  - [ ] **SR-3f**: Add debounce to input handler
+  - [x] **SR-3a**: Add search input field and styling
+  - [x] **SR-3b**: Index all visible text content on page load (TreeWalker API)
+  - [x] **SR-3c**: Implement match highlighting (wrap in `<span class="search-highlight">`)
+  - [x] **SR-3d**: Add match count display and prev/next navigation (F3/Shift+F3)
+  - [x] **SR-3e**: Handle collapsed content (auto-expand details elements containing matches)
+  - [x] **SR-3f**: Add debounce to input handler (250ms)
+- **Done**: 2026-04-29
+- **Implementation notes**: Uses TreeWalker API to find text nodes. Debounced input handler. Auto-expands collapsed sections. Keyboard shortcuts: Ctrl+F to focus, F3/Shift+F3 to navigate.
 
 ---
 
@@ -116,12 +120,14 @@
   - **Key consideration**: Must handle both visible content and content hidden behind expand/collapse. Copy the full text, not just the visible preview.
   - Files affected: `html-renderer/index.js` (add copy buttons, CSS, JS handler).
 - **Sub-tasks**:
-  - [ ] **CP-1a**: Implement copy button UI and CSS
-  - [ ] **CP-1b**: Wire up Clipboard API with success/error feedback
-  - [ ] **CP-1c**: Add copy buttons to user messages (full text)
-  - [ ] **CP-1d**: Add copy buttons to assistant messages (text + thinking)
-  - [ ] **CP-1e**: Add copy buttons to tool results
-  - [ ] **CP-1f**: Add copy buttons to code blocks (if markdown rendering exists)
+  - [x] **CP-1a**: Implement copy button UI and CSS (dark mode aware)
+  - [x] **CP-1b**: Wire up Clipboard API with success/error feedback
+  - [x] **CP-1c**: Add copy buttons to user messages (full text)
+  - [x] **CP-1d**: Add copy buttons to assistant messages (text + thinking)
+  - [x] **CP-1e**: Add copy buttons to tool results
+  - [x] **CP-1f**: Add copy buttons to code blocks (via markdown rendering)
+- **Done**: 2026-04-29
+- **Implementation notes**: Uses data-copy-text attribute for text content. Clipboard API with 2-second visual feedback.
 
 ---
 
@@ -137,10 +143,12 @@
   - **Key consideration**: Some sessions have no token data (older sessions, failed API calls). Gracefully hide the visualisation if data is missing.
   - Files affected: `html-renderer/index.js` (metadata card CSS, token bar HTML).
 - **Sub-tasks**:
-  - [ ] **TV-1a**: Add input/output stacked bar in metadata card
-  - [ ] **TV-1b**: Add cached read/write segments (if present)
-  - [ ] **TV-1c**: Add per-turn token counts on assistant messages (optional)
-  - [ ] **TV-1d**: Handle missing token data gracefully
+  - [x] **TV-1a**: Add input/output stacked bar in metadata card
+  - [x] **TV-1b**: Add cached read/write segments (if present)
+  - [x] **TV-1c**: Add per-turn token counts on assistant messages (optional)
+  - [x] **TV-1d**: Handle missing token data gracefully (bar hidden if no token data)
+- **Done**: 2026-04-29
+- **Implementation notes**: CSS-only stacked bar with percentage-based widths. Hover tooltip shows percentage breakdown. Dark mode aware colors.
 
 ---
 
@@ -159,12 +167,14 @@
   - **Key consideration**: All client-side — no server required. Filter state could optionally be stored in URL hash for bookmarkability.
   - Files affected: `session-indexer/index.js` (add filter controls HTML, CSS, JS).
 - **Sub-tasks**:
-  - [ ] **SR-4a**: Add search bar (filter by title, prompt text, session ID)
-  - [ ] **SR-4b**: Add date range filter
-  - [ ] **SR-4c**: Add model filter dropdown (populate from session data)
-  - [ ] **SR-4d**: Add message count range filter
-  - [ ] **SR-4e**: Add match count display
-  - [ ] **SR-4f**: Optional: URL hash for bookmarkable filter state
+  - [x] **SR-4a**: Add search bar (filter by title, prompt text, session ID)
+  - [x] **SR-4b**: Add date range filter
+  - [x] **SR-4c**: Add model filter dropdown (populate from session data)
+  - [x] **SR-4d**: Add message count range filter (min/max turns)
+  - [x] **SR-4e**: Add match count display (X sessions found)
+  - [x] **SR-4f**: Optional: URL hash for bookmarkable filter state
+- **Done**: 2026-04-29
+- **Implementation notes**: Client-side filtering using data attributes on cards. Instant results with instant filtering. Reset button to clear all filters.
 
 ---
 
