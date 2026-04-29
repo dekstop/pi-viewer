@@ -158,13 +158,8 @@ function buildAssistantMessage(msg) {
   if (toolCalls && toolCalls.length > 0) {
     const toolCallHtml = toolCalls.map(tc => {
       const icon = getToolCallIcon(tc.name);
-      let preview = '';
-      if (typeof tc.arguments === 'string' && tc.arguments) {
-        preview = tc.arguments.substring(0, 50);
-      } else if (typeof tc.arguments === 'object' && tc.arguments) {
-        const keys = Object.keys(tc.arguments);
-        preview = keys.map(k => `${k}: ${tc.arguments[k]}`).join(', ').substring(0, 50);
-      }
+      // TF-1: Format tool call arguments more intelligibly
+      let preview = formatToolCallArgs(tc.name, tc.arguments);
 
       const badgeId = `tc-${tc.toolCallId || tc.name}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -570,6 +565,70 @@ function buildCustomMessageBlock(cm) {
     ${isLong ? `<div class="message-full" style="display:none"><pre data-markdown="${escapeHtml(content.trim())}"></pre></div>
     <div class="message-expand" onclick="toggleExpand(this)">Show full message</div>` : ''}
   </div>`;
+}
+
+/**
+ * TF-1: Format tool call arguments more intelligibly.
+ * Parses arguments and extracts meaningful values based on tool type.
+ */
+function formatToolCallArgs(name, arguments_)
+ {
+  if (!arguments_) return '';
+  
+  // Try to parse as JSON object
+  let parsed = null;
+  if (typeof arguments_ === 'string') {
+    try {
+      parsed = JSON.parse(arguments_);
+    } catch (e) {
+      // Not valid JSON, treat as plain text
+      return arguments_.substring(0, 50);
+    }
+  } else if (typeof arguments_ === 'object') {
+    parsed = arguments_;
+  }
+  
+  if (!parsed || typeof parsed !== 'object') {
+    return String(arguments_).substring(0, 50);
+  }
+  
+  const normalizedName = (name || '').toLowerCase();
+  
+  // TF-1a: Tool-type-aware formatting
+  switch (normalizedName) {
+    case 'read': {
+      // read: show file path
+      const filePath = parsed.file_path || parsed.filepath || parsed.path || parsed.filename || '';
+      return filePath ? `📖 ${escapeHtml(String(filePath))}` : '';
+    }
+    case 'write': {
+      // write: show file path + write indicator
+      const filePath = parsed.file_path || parsed.filepath || parsed.path || parsed.filename || '';
+      return filePath ? `✍️ Write: ${escapeHtml(String(filePath))}` : '';
+    }
+    case 'edit': {
+      // edit: show file path + edit operation
+      const filePath = parsed.file_path || parsed.filepath || parsed.path || parsed.filename || '';
+      const operation = parsed.operation || parsed.editType || parsed.type || '';
+      return filePath ? `🔧 Edit: ${escapeHtml(String(filePath))}${operation ? ` (${escapeHtml(String(operation))})` : ''}` : '';
+    }
+    case 'bash': {
+      // bash: show command (first 80 chars)
+      const command = parsed.command || parsed.cmd || parsed.sh || parsed.script || '';
+      const cmdStr = String(command).substring(0, 80);
+      return command ? `⚡ ${escapeHtml(cmdStr)}` : '';
+    }
+    default: {
+      // Generic: show first few key-value pairs
+      const keys = Object.keys(parsed);
+      if (keys.length === 0) return '';
+      const parts = keys.slice(0, 3).map(k => {
+        const val = String(parsed[k]).substring(0, 40);
+        return `${k}: ${val}`;
+      });
+      return parts.join(' | ');
+    }
+  }
 }
 
 /**
