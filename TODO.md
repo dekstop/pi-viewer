@@ -197,7 +197,7 @@
 ---
 
 ### TF-1: Tool Call Argument Formatting
-- **What**: Format tool call arguments more intelligibly. Currently raw truncated text (`arguments.substring(0, 50)`).
+- **What**: Format tool call arguments more intelligibly.
 - **Current state**: Tool call arguments are often JSON objects. For `edit` tools, they contain file path + operation. For `bash`, they contain the command. For `read`, the file path.
 - **Implementation**:
   - In `buildAssistantMessage()` (tool call badge rendering):
@@ -210,28 +210,29 @@
     - Fall back to current truncated text if parsing fails.
   - **Key consideration**: Must handle malformed or unusual arguments gracefully (try/catch around JSON.parse).
 - **Sub-tasks**:
-  - [ ] **TF-1a**: Add tool-type-aware argument formatting for read/write/edit/bash
-  - [ ] **TF-1b**: Handle JSON argument parsing with graceful fallback
-  - [ ] **TF-1c**: Update tool call badge styling to accommodate formatted arguments
-- **Status**: Pending
+  - [x] **TF-1a**: Add tool-type-aware argument formatting for read/write/edit/bash
+  - [x] **TF-1b**: Handle JSON argument parsing with graceful fallback
+  - [x] **TF-1c**: Update tool call badge styling to accommodate formatted arguments
+- **Done**: 2026-04-29
+- **Implementation notes**: Parses JSON args, extracts file paths, commands, operations per tool type. Handles malformed args gracefully.
 
 ---
 
 ### ST-1: Session Tree Sidebar — Full Depth
-- **What**: Session tree sidebar should show full lineage (grandparent, parent, siblings) with navigation links, not just the immediate parent.
-- **Current state**: Only shows the immediate parent session ID (truncated) with "This Session" label. No links to parent or siblings.
+- **What**: Session tree sidebar shows full lineage (grandparent, parent, siblings) with navigation links.
+- **Current state**: Previously only showed the immediate parent session ID (truncated) with "This Session" label.
 - **Implementation**:
-  - In `index.js`, the parent-child map (`childMap`) already exists. Pass the full tree structure to `buildSessionTree()`.
-  - Build a recursive tree: parent → children → grandchildren, with links to sibling HTML files.
+  - In `index.js`, build full parent-child tree structure.
+  - Build a recursive tree: parent → children → grandchildren, with depth limit.
   - Show the current session highlighted within the tree.
-  - **Key consideration**: Tree can be deep. Show a reasonable depth (e.g., 3 levels) with "..." indicators for deeper branches.
-  - Files affected: `index.js` (pass tree data), `html-renderer/index.js` (`buildSessionTree` function).
+  - **Key consideration**: Tree can be deep. Show depth of 3 levels.
 - **Sub-tasks**:
-  - [ ] **ST-1a**: Pass full parent/child tree from index.js to session data
-  - [ ] **ST-1b**: Build recursive tree HTML with navigation links to siblings
-  - [ ] **ST-1c**: Highlight current session in tree
-  - [ ] **ST-1d**: Depth limiting with "..." indicators
-- **Status**: Pending
+  - [x] **ST-1a**: Pass full parent/child tree from index.js to session data
+  - [x] **ST-1b**: Build recursive tree HTML with navigation links to siblings
+  - [x] **ST-1c**: Highlight current session in tree
+  - [x] **ST-1d**: Depth limiting with "..." indicators
+- **Done**: 2026-04-29
+- **Implementation notes**: Recursive tree builder in index.js, depth limit of 3. Extracts session IDs from full paths. Highlights current session with distinct styling.
 
 ---
 
@@ -239,16 +240,15 @@
 - **What**: Show round-trip time for thinking blocks (time between thinking message and next message).
 - **Impact**: Gives insight into how long the model "thought" before responding.
 - **Implementation**:
-  - Calculate duration between a thinking message's timestamp and the next assistant/toolResult message timestamp.
-  - Display as "💭 Thinking (3.2s)" or similar in the thinking block summary.
-  - **Key consideration**: Requires access to the next message's timestamp. Need to pass timing context through the turn rendering.
-  - **Key consideration**: Timestamps may be ISO strings or epoch numbers — ensure consistent comparison.
-  - Files affected: `event-parser/index.js` (calculate timing), `html-renderer/index.js` (display duration).
+  - Calculate duration between assistant message timestamps.
+  - Display as "💭 Thinking (46s)" in the thinking block summary.
+  - **Key consideration**: Timestamps are ISO strings — consistent parsing via Date constructor.
 - **Sub-tasks**:
-  - [ ] **TD-1a**: Calculate inter-message durations in `buildSessionData()`
-  - [ ] **TD-1b**: Attach duration to thinking blocks in enriched message data
-  - [ ] **TD-1c**: Display duration in thinking block summary line
-- **Status**: Pending
+  - [x] **TD-1a**: Calculate inter-message durations in `buildSessionData()`
+  - [x] **TD-1b**: Attach duration to thinking blocks in enriched message data
+  - [x] **TD-1c**: Display duration in thinking block summary line
+- **Done**: 2026-04-29
+- **Implementation notes**: Duration calculated from chronological ordering of assistant messages. Displayed as monospace badge next to thinking summary.
 
 ---
 
