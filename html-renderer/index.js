@@ -26,6 +26,12 @@ function buildPage(sessionData, options = {}) {
     <header class="metadata-header">
       ${buildMetadataCard(sessionData)}
     </header>
+    <div class="search-bar" id="search-bar">
+      <input type="text" id="search-input" placeholder="Search messages…" autocomplete="off" />
+      <span class="search-count" id="search-count"></span>
+      <button class="search-nav" id="search-prev" title="Previous match" style="display:none">‹</button>
+      <button class="search-nav" id="search-next" title="Next match" style="display:none">›</button>
+    </div>
     <div class="content">
       ${buildSessionTree(sessionData)}
       <div class="conversation">
@@ -647,6 +653,87 @@ const CSS = `
   .content {
     display: flex;
     gap: 1.5rem;
+  }
+
+  /* SR-3: Search bar styling */
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background: var(--assistant-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  #search-input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+  }
+
+  #search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+  }
+
+  .search-count {
+    font-size: 0.8rem;
+    color: #888;
+    white-space: nowrap;
+    min-width: 80px;
+    text-align: right;
+  }
+
+  .search-nav {
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .search-nav:hover {
+    background: var(--code-bg);
+  }
+
+  /* SR-3: Search match highlighting */
+  .search-highlight {
+    background: #fff59d;
+    color: inherit;
+    border-radius: 2px;
+    padding: 0.05rem 0.1rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .search-highlight {
+      background: #757500;
+    }
+  }
+
+  .search-highlight.current {
+    background: #ffeb3b;
+    box-shadow: 0 0 0 2px #f57f17;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .search-highlight.current {
+      background: #c6ff00;
+      box-shadow: 0 0 0 2px #f57c00;
+    }
   }
   
   .session-tree {
@@ -1459,6 +1546,156 @@ const JS = `
   if (typeof hljs !== 'undefined') {
     hljs.initHighlightingOnLoad();
   }
+
+  // SR-3: Client-side search functionality
+  var _searchMatches = [];
+  var _searchCurrentIndex = -1;
+  var _searchDebounceTimer = null;
+
+  function escapeRegex(str) {
+    return str.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+  }
+
+  function removeHighlights() {
+    document.querySelectorAll('.search-highlight').forEach(function(el) {
+      var parent = el.parentNode;
+      parent.replaceChild(document.createTextNode(el.textContent), el);
+      parent.normalize();
+    });
+  }
+
+  function performSearch(query) {
+    removeHighlights();
+    _searchMatches = [];
+    _searchCurrentIndex = -1;
+
+    var countEl = document.getElementById('search-count');
+    var prevBtn = document.getElementById('search-prev');
+    var nextBtn = document.getElementById('search-next');
+
+    if (!query || query.length < 2) {
+      if (countEl) countEl.textContent = '';
+      if (prevBtn) prevBtn.style.display = 'none';
+      if (nextBtn) nextBtn.style.display = 'none';
+      return;
+    }
+
+    // Find all text nodes in the conversation area
+    var conversation = document.querySelector('.conversation');
+    if (!conversation) return;
+
+    var textNodes = [];
+    var walker = document.createTreeWalker(conversation, NodeFilter.SHOW_TEXT, null, false);
+    var node;
+    while ((node = walker.nextNode())) {
+      textNodes.push(node);
+    }
+
+    var pattern = escapeRegex(query);
+    var regex = new RegExp('(' + pattern + ')', 'gi');
+
+    textNodes.forEach(function(textNode) {
+      var text = textNode.nodeValue;
+      var match;
+      while ((match = regex.exec(text)) !== null) {
+        var span = document.createElement('span');
+        span.className = 'search-highlight';
+        span.textContent = match[0];
+        textNode.parentNode.insertBefore(span, textNode.nextSibling);
+        textNode.deleteData(match.index, match[0].length);
+        _searchMatches.push(span);
+      }
+    });
+
+    // Update UI
+    if (countEl) {
+      countEl.textContent = _searchMatches.length > 0 ? _searchMatches.length + ' matches' : 'No matches';
+    }
+    if (prevBtn) prevBtn.style.display = _searchMatches.length > 0 ? 'flex' : 'none';
+    if (nextBtn) nextBtn.style.display = _searchMatches.length > 0 ? 'flex' : 'none';
+
+    // Expand any collapsed sections to show matches
+    expandForMatches();
+  }
+
+  function expandForMatches() {
+    // Expand collapsed details elements to show matches
+    document.querySelectorAll('details:not([open])').forEach(function(details) {
+      // Check if any content inside would match
+      var textContent = details.textContent;
+      var input = document.getElementById('search-input');
+      if (input && input.value && input.value.length >= 2) {
+        var pattern = escapeRegex(input.value);
+        var regex = new RegExp('(' + pattern + ')', 'i');
+        if (regex.test(textContent)) {
+          details.open = true;
+        }
+      }
+    });
+  }
+
+  function navigateSearch(direction) {
+    if (_searchMatches.length === 0) return;
+
+    // Remove current class
+    _searchMatches.forEach(function(el) {
+      el.classList.remove('current');
+    });
+
+    _searchCurrentIndex += direction;
+    if (_searchCurrentIndex >= _searchMatches.length) _searchCurrentIndex = 0;
+    if (_searchCurrentIndex < 0) _searchCurrentIndex = _searchMatches.length - 1;
+
+    var current = _searchMatches[_searchCurrentIndex];
+    current.classList.add('current');
+    current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // Debounced search input handler
+  function onSearchInput(e) {
+    var query = e.target.value.trim();
+    if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
+    _searchDebounceTimer = setTimeout(function() {
+      performSearch(query);
+    }, 250);
+  }
+
+  // Wire up search controls
+  document.addEventListener('DOMContentLoaded', function() {
+    var searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', onSearchInput);
+    }
+
+    var prevBtn = document.getElementById('search-prev');
+    if (prevBtn) {
+      prevBtn.addEventListener('click', function() { navigateSearch(-1); });
+    }
+
+    var nextBtn = document.getElementById('search-next');
+    if (nextBtn) {
+      nextBtn.addEventListener('click', function() { navigateSearch(1); });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        var searchBar = document.getElementById('search-bar');
+        if (searchBar) {
+          var input = document.getElementById('search-input');
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }
+      }
+      if (e.key === 'F3' || (e.shiftKey && e.key === 'F3')) {
+        e.preventDefault();
+        navigateSearch(e.shiftKey ? -1 : 1);
+      }
+    });
+  });
 `;
 
 module.exports = {
