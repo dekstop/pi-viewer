@@ -6,7 +6,7 @@
  */
 function buildPage(sessionData, options = {}) {
   const { title: pageTitle } = options;
-  const title = pageTitle || `${sessionData.title} — Pi Session`;
+  const title = pageTitle || `${sessionData.title} - Pi Session`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -27,7 +27,7 @@ function buildPage(sessionData, options = {}) {
       ${buildMetadataCard(sessionData)}
     </header>
     <div class="search-bar" id="search-bar">
-      <input type="text" id="search-input" placeholder="Search messages…" autocomplete="off" />
+      <input type="text" id="search-input" placeholder="Search messages..." autocomplete="off" />
       <span class="search-count" id="search-count"></span>
       <button class="search-nav" id="search-prev" title="Previous match" style="display:none">‹</button>
       <button class="search-nav" id="search-next" title="Next match" style="display:none">›</button>
@@ -51,7 +51,7 @@ function buildPage(sessionData, options = {}) {
 function buildConversationView(sessionData) {
   // NEP-3: Reset branch summary tracking for each page render
   _renderedBranchSummaryIds = null;
-  
+
   if (!sessionData.turns || sessionData.turns.length === 0) {
     return '<div class="no-messages">No conversation messages found.</div>';
   }
@@ -100,12 +100,13 @@ function buildUserMessage(user) {
   const summary = text.split('\n')[0] || 'User message';
   const timestamp = user.timestamp ? formatTimestamp(user.timestamp) : '';
   const labelHtml = user.label ? buildBookmarkIndicator(user.label) : '';
-  
+
   return `<div class="message user-message">
     <div class="message-header">
       <span class="role-badge user-badge">User</span>
       ${labelHtml}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
+      <button class="copy-btn" data-copy-text="${escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" title="Copy message">📋</button>
     </div>
     <div class="message-body">${escapeHtml(summary)}</div>
     ${text.includes('\n') ? `<div class="message-full" style="display:none"><pre>${escapeHtml(text)}</pre></div>
@@ -119,31 +120,31 @@ function buildUserMessage(user) {
 function buildAssistantMessage(msg) {
   const { thinking, text, toolCalls, stopReason, errorMessage } = msg;
   const parts = [];
-  
+
   // Valid/expected stop reasons: normal completions from the model
   const expectedStopReasons = ['toolUse', 'endTurn', 'stop', 'length', 'cancelled'];
-  
+
   // Show error indicator if there's an error message or truly unexpected stop reason
   if (errorMessage) {
     parts.push(`<div class="error-indicator">⚠️ ${escapeHtml(errorMessage)}</div>`);
   } else if (stopReason && !expectedStopReasons.includes(stopReason)) {
     parts.push(`<div class="error-indicator">⚠️ Unexpected stop reason: ${escapeHtml(stopReason)}</div>`);
   }
-  
+
   // Thinking block (collapsible, MR-1: markdown rendering)
   if (thinking && thinking.length > 0) {
     const thinkingText = thinking.join('\n');
     parts.push(`<details class="thinking-block">
-      <summary>💭 Thinking</summary>
+      <summary>💭 Thinking <button class="copy-btn" data-copy-text="${escapeHtml(thinkingText).replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" title="Copy thinking">📋</button></summary>
       <div class="thinking-content" data-markdown="${escapeHtml(thinkingText)}"></div>
     </details>`);
   }
-  
+
   // Text content (MR-1: markdown rendering)
   if (text) {
     parts.push(`<div class="message-body" data-markdown="${escapeHtml(text)}"></div>`);
   }
-  
+
   // Tool calls summary with inline results (NEP-8)
   if (toolCalls && toolCalls.length > 0) {
     const toolCallHtml = toolCalls.map(tc => {
@@ -167,19 +168,19 @@ function buildAssistantMessage(msg) {
         const previewText = resultText ? resultText.substring(0, 100) : '';
         const isLong = (resultText || '').length > 100;
         const expandId = `tr-${tc.toolCallId || tc.name}-${Math.random().toString(36).slice(2, 8)}`;
-        resultHtml = `<span class="tool-call-result ${resultClass}">${resultIcon} ${escapeHtml(tc.result.toolName || '')}${isLong ? ` ${escapeHtml(previewText)}…` : ''}</span>`;
+        resultHtml = `<span class="tool-call-result ${resultClass}">${resultIcon} ${escapeHtml(tc.result.toolName || '')}${isLong ? ` ${escapeHtml(previewText)}...` : ''}</span>`;
         if (isLong && resultText) {
           resultHtml += `<span class="tool-call-result-full" style="display:none" id="${expandId}">${escapeHtml(resultText)}</span>`;
           resultHtml += ` <span class="tool-call-result-expand" data-target="${expandId}" onclick="toggleToolResult(this)">Show full result</span>`;
         }
       }
 
-      return `<span class="tool-call-badge" id="${badgeId}">${icon} ${escapeHtml(tc.name)}${preview ? ` — ${escapeHtml(preview)}…` : ''}${resultHtml}</span>`;
+      return `<span class="tool-call-badge" id="${badgeId}">${icon} ${escapeHtml(tc.name)}${preview ? ` - ${escapeHtml(preview)}...` : ''}${resultHtml}</span>`;
     }).join(' ');
 
     parts.push(`<div class="tool-calls">${toolCallHtml}</div>`);
   }
-  
+
   const timestamp = msg.timestamp ? formatTimestamp(msg.timestamp) : '';
   const model = msg.model || '';
   let stopBadge = '';
@@ -187,7 +188,7 @@ function buildAssistantMessage(msg) {
     const stopLabel = stopReason === 'toolUse' ? '🔧 Tool' : stopReason === 'endTurn' ? '✅ End' : stopReason === 'stop' ? '⏹ Stop' : stopReason === 'length' ? '📏 Length' : `⚠️ ${stopReason}`;
     stopBadge = `<span class="stop-badge" title="Stop reason: ${escapeHtml(stopReason)}">${stopLabel}</span>`;
   }
-  
+
   return `<div class="message assistant-message">
     <div class="message-header">
       <span class="role-badge assistant-badge">Assistant</span>
@@ -195,6 +196,7 @@ function buildAssistantMessage(msg) {
       ${stopBadge}
       ${msg.label ? buildBookmarkIndicator(msg.label) : ''}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
+      <button class="copy-btn" data-copy-text="${escapeHtml(text || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" title="Copy message">📋</button>
     </div>
     <div class="message-body-wrapper">
       ${parts.join('\n')}
@@ -209,26 +211,30 @@ function buildToolResultMessage(msg) {
   const { text, toolName, isError, errorMessage } = msg;
   const timestamp = msg.timestamp ? formatTimestamp(msg.timestamp) : '';
   const labelHtml = msg.label ? buildBookmarkIndicator(msg.label) : '';
-  
+
+  const copyBtnHtml = `<button class="copy-btn" data-copy-text="${escapeHtml(text || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" title="Copy result">📋</button>`;
+
   if (isError) {
     return `<div class="message tool-result-message tool-result-error">
       <div class="message-header">
         <span class="role-badge tool-result-badge">⚠️ Error</span>
         ${labelHtml}
         ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
+        ${copyBtnHtml}
       </div>
       <div class="message-body">${escapeHtml(errorMessage || 'Tool execution failed')}</div>
     </div>`;
   }
-  
-  const preview = text ? text.trim().substring(0, 200) + (text.length > 200 ? '…' : '') : 'No output';
+
+  const preview = text ? text.trim().substring(0, 200) + (text.length > 200 ? '...' : '') : 'No output';
   const expandClass = text && text.length > 200 ? `<div class="message-full" style="display:none"><pre data-markdown="${escapeHtml(text.trim())}"></pre></div><div class="message-expand" onclick="toggleExpand(this)">${text.length > 200 ? 'Show full result' : 'Show full result'}</div>` : '';
-  
+
   return `<div class="message tool-result-message">
     <div class="message-header">
       <span class="role-badge tool-result-badge">🔧 ${escapeHtml(toolName || 'Tool Result')}</span>
       ${labelHtml}
       ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
+      ${copyBtnHtml}
     </div>
     <div class="message-body" data-markdown="${escapeHtml(preview)}"></div>
     ${expandClass}
@@ -241,32 +247,32 @@ function buildToolResultMessage(msg) {
  */
 function buildMetadataCard(sessionData) {
   const { title, timestamp, cwd, currentModel, durationSec, compactionCount, compactionEntries, labelEntries, totalInputTokens, totalOutputTokens, totalCacheReadTokens, totalCacheWriteTokens, totalAllTokens } = sessionData;
-  
+
   let html = `<h1>${escapeHtml(title)}</h1>`;
-  
+
   if (timestamp) {
     html += `<div class="meta-row">📅 ${formatTimestamp(timestamp)}</div>`;
   }
-  
+
   if (currentModel) {
     html += `<div class="meta-row">🤖 ${escapeHtml(currentModel.provider || '')} / ${escapeHtml(currentModel.model || '')}</div>`;
   }
-  
+
   if (durationSec !== undefined) {
     const mins = Math.floor(durationSec / 60);
     const secs = durationSec % 60;
     const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
     html += `<div class="meta-row">⏱ Duration: ${durStr}</div>`;
   }
-  
+
   if (cwd) {
     html += `<div class="meta-row">📁 ${escapeHtml(cwd)}</div>`;
   }
-  
+
   // Token usage stats
   if (totalAllTokens > 0) {
     html += `<div class="meta-row">📊 Token stats:</div>`;
-    html += `<div class="meta-row token-stats">`; 
+    html += `<div class="meta-row token-stats">`;
     html += `📥 ${totalInputTokens.toLocaleString()} in `;
     html += `📤 ${totalOutputTokens.toLocaleString()} out `;
     html += `📊 ${totalAllTokens.toLocaleString()} total`;
@@ -278,18 +284,18 @@ function buildMetadataCard(sessionData) {
     }
     html += `</div>`;
   }
-  
+
   if (compactionCount > 0) {
     const hookCount = (compactionEntries || []).filter(c => c.fromHook).length;
     html += `<div class="meta-row">🗑 Compactions: ${compactionCount}${hookCount > 0 ? ` (${hookCount} auto)` : ''}</div>`;
-    
+
     // Render expandable compaction summaries
     if (compactionEntries && compactionEntries.length > 0) {
       const compactionDetails = compactionEntries
         .map((c, idx) => {
           const hookTag = c.fromHook ? ' <span class="hook-tag">auto</span>' : '';
           const tokensStr = c.tokensBefore ? ` • ${c.tokensBefore.toLocaleString()} tokens` : '';
-          const summaryHtml = c.summary ? `<div class="compaction-summary" data-markdown="${escapeHtml(c.summary.substring(0, 300))}${c.summary.length > 300 ? '…' : ''}"></div>` : '';
+          const summaryHtml = c.summary ? `<div class="compaction-summary" data-markdown="${escapeHtml(c.summary.substring(0, 300))}${c.summary.length > 300 ? '...' : ''}"></div>` : '';
           return `<details class="compaction-detail" id="compaction-${idx}">
             <summary>Compaction ${idx + 1}${hookTag}${tokensStr}</summary>
             ${summaryHtml}
@@ -298,7 +304,7 @@ function buildMetadataCard(sessionData) {
       html += `<div class="compaction-details">${compactionDetails}</div>`;
     }
   }
-  
+
   // NEP-4: Show label count
   const labelCount = labelEntries ? labelEntries.filter(l => l.label).length : 0;
   if (labelCount > 0) {
@@ -306,10 +312,10 @@ function buildMetadataCard(sessionData) {
       .filter(l => l.label)
       .map(l => escapeHtml(l.label))
       .join(', ');
-    const tooltip = labelsDisplay.length > 100 ? labelsDisplay.substring(0, 100) + '…' : labelsDisplay;
+    const tooltip = labelsDisplay.length > 100 ? labelsDisplay.substring(0, 100) + '...' : labelsDisplay;
     html += `<div class="meta-row" title="Bookmarks: ${labelsDisplay}">🔖 Bookmarks: ${labelCount} <span style="color:#888;font-size:0.78rem">(${tooltip})</span></div>`;
   }
-  
+
   return `<div class="metadata-card">${html}</div>`;
 }
 
@@ -321,12 +327,12 @@ function buildSessionTree(sessionData) {
   if (!sessionData.parentSessionId) {
     return '';
   }
-  
+
   return `<div class="session-tree">
     <h3>Session Tree</h3>
     <ul class="tree-root">
       <li class="tree-node">
-        <span class="tree-label">📂 ${escapeHtml(sessionData.parentSessionId.substring(0, 16))}…</span>
+        <span class="tree-label">📂 ${escapeHtml(sessionData.parentSessionId.substring(0, 16))}...</span>
         <ul>
           <li class="tree-node tree-current">
             <span class="tree-label tree-label-current">📂 This Session</span>
@@ -348,14 +354,14 @@ function buildBranchSummaryBeforeTurn(sessionData, turnIdx) {
   if (!sessionData.branchSummaryEntries || sessionData.branchSummaryEntries.length === 0) {
     return '';
   }
-  
+
   if (_renderedBranchSummaryIds === null) {
     _renderedBranchSummaryIds = new Set();
   }
-  
+
   const turn = sessionData.turns[turnIdx];
   if (!turn) return '';
-  
+
   // Collect all message IDs in this turn
   const turnIds = new Set();
   if (turn.user) turnIds.add(turn.user.id);
@@ -365,7 +371,7 @@ function buildBranchSummaryBeforeTurn(sessionData, turnIdx) {
   for (const tr of (turn.toolResults || [])) {
     turnIds.add(tr.id);
   }
-  
+
   let html = '';
   for (const bs of sessionData.branchSummaryEntries) {
     if (_renderedBranchSummaryIds.has(bs.id)) continue;
@@ -382,7 +388,7 @@ function buildOrphanBranchSummaries(sessionData) {
   if (!sessionData.branchSummaryEntries || sessionData.branchSummaryEntries.length === 0) {
     return '';
   }
-  
+
   let html = '';
   for (const bs of sessionData.branchSummaryEntries) {
     if (!_renderedBranchSummaryIds || !_renderedBranchSummaryIds.has(bs.id)) {
@@ -400,12 +406,12 @@ function buildOrphanBranchSummaries(sessionData) {
 function buildBranchSummaryBlock(branchSummary) {
   const timestamp = branchSummary.timestamp ? formatTimestamp(branchSummary.timestamp) : '';
   const hookTag = branchSummary.fromHook ? ' <span class="hook-tag">auto</span>' : '';
-  const fromIdPreview = branchSummary.fromId ? `<span class="branch-from-id">${escapeHtml(branchSummary.fromId.substring(0, 12))}…</span>` : '';
-  
+  const fromIdPreview = branchSummary.fromId ? `<span class="branch-from-id">${escapeHtml(branchSummary.fromId.substring(0, 12))}...</span>` : '';
+
   return `<div class="branch-summary" id="branch-summary-${branchSummary.id ? branchSummary.id.substring(0, 8) : Math.random().toString(36).slice(2, 8)}">
     <details class="branch-summary-details">
       <summary class="branch-summary-summary">
-        🌿 Branch${hookTag} — ${escapeHtml(branchSummary.summary || 'Branch summary').substring(0, 80)}${branchSummary.summary && branchSummary.summary.length > 80 ? '…' : ''}
+        🌿 Branch${hookTag} - ${escapeHtml(branchSummary.summary || 'Branch summary').substring(0, 80)}${branchSummary.summary && branchSummary.summary.length > 80 ? '...' : ''}
         ${timestamp ? `<span class="message-time">${timestamp}</span>` : ''}
         ${fromIdPreview}
       </summary>
@@ -504,7 +510,7 @@ function buildCustomMessageBlock(cm) {
   const content = cm.content || '';
   const preview = content.trim().substring(0, 200) || '(empty)';
   const isLong = content.length > 200;
-  
+
   return `<div class="message custom-message">
     <div class="message-header">
       <span class="role-badge custom-badge">📦 Custom</span>
@@ -567,7 +573,7 @@ const CSS = `
     --code-bg: #f0f0f0;
     --accent: #1976d2;
   }
-  
+
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #1a1a2e;
@@ -580,9 +586,9 @@ const CSS = `
       --accent: #64b5f6;
     }
   }
-  
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
@@ -590,16 +596,16 @@ const CSS = `
     line-height: 1.6;
     padding: 1rem;
   }
-  
+
   .container {
     max-width: 900px;
     margin: 0 auto;
   }
-  
+
   .metadata-header {
     margin-bottom: 1.5rem;
   }
-  
+
   .metadata-card {
     background: var(--assistant-bg);
     border: 1px solid var(--border);
@@ -607,27 +613,27 @@ const CSS = `
     padding: 1rem 1.25rem;
     font-size: 0.9rem;
   }
-  
+
   .metadata-card h1 {
     font-size: 1.4rem;
     margin-bottom: 0.75rem;
     font-weight: 600;
   }
-  
+
   .meta-row {
     display: inline-block;
     margin-right: 1.5rem;
     margin-bottom: 0.5rem;
     color: #666;
   }
-  
+
   .meta-row .token-stats {
     display: block;
     margin-left: 2rem;
     font-size: 0.82rem;
     color: #888;
   }
-  
+
   .error-indicator {
     background: #ffebee;
     border: 1px solid #ef9a9a;
@@ -637,7 +643,7 @@ const CSS = `
     color: #c62828;
     margin-top: 0.5rem;
   }
-  
+
   @media (prefers-color-scheme: dark) {
     .error-indicator {
       background: #3e2424;
@@ -645,11 +651,11 @@ const CSS = `
       color: #ef9a9a;
     }
   }
-  
+
   @media (prefers-color-scheme: dark) {
     .meta-row { color: #aaa; }
   }
-  
+
   .content {
     display: flex;
     gap: 1.5rem;
@@ -735,12 +741,12 @@ const CSS = `
       box-shadow: 0 0 0 2px #f57c00;
     }
   }
-  
+
   .session-tree {
     flex-shrink: 0;
     min-width: 180px;
   }
-  
+
   .session-tree h3 {
     font-size: 0.85rem;
     text-transform: uppercase;
@@ -748,22 +754,22 @@ const CSS = `
     color: #888;
     margin-bottom: 0.5rem;
   }
-  
+
   .tree-root, .tree-root ul {
     list-style: none;
     padding-left: 1rem;
   }
-  
+
   .tree-node {
     margin: 0.3rem 0;
     font-size: 0.85rem;
   }
-  
+
   .tree-label {
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
   }
-  
+
   .tree-label-current {
     background: var(--accent);
     color: white;
@@ -771,36 +777,36 @@ const CSS = `
     border-radius: 4px;
     font-weight: 500;
   }
-  
+
   .conversation {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 1rem;
   }
-  
+
   .turn {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .message {
     border-radius: 8px;
     padding: 1rem 1.25rem;
     border: 1px solid var(--border);
   }
-  
+
   .user-message {
     background: var(--user-bg);
     border-left: 3px solid #2196f3;
   }
-  
+
   .assistant-message {
     background: var(--assistant-bg);
     border-left: 3px solid #4caf50;
   }
-  
+
   .message-header {
     display: flex;
     align-items: center;
@@ -808,24 +814,24 @@ const CSS = `
     margin-bottom: 0.5rem;
     font-size: 0.85rem;
   }
-  
+
   .role-badge {
     font-weight: 600;
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.05em;
   }
-  
+
   .user-badge { color: var(--user-text); }
   .assistant-badge { color: #388e3c; }
-  
+
   .model-label {
     background: var(--code-bg);
     padding: 0.1rem 0.4rem;
     border-radius: 3px;
     font-size: 0.75rem;
   }
-  
+
   .stop-badge {
     background: var(--code-bg);
     padding: 0.1rem 0.4rem;
@@ -834,38 +840,38 @@ const CSS = `
     color: #555;
     border: 1px solid var(--border);
   }
-  
+
   @media (prefers-color-scheme: dark) {
     .stop-badge {
       color: #bbb;
     }
   }
-  
+
   .message-time {
     margin-left: auto;
     color: #888;
     font-size: 0.75rem;
   }
-  
+
   /* NEP-3: Branch summary blocks */
   .branch-summary {
     margin: 0.5rem 0;
   }
-  
+
   .branch-summary-details {
     border: 1px dashed #ce93c8;
     border-radius: 6px;
     overflow: hidden;
     background: rgba(206, 145, 200, 0.06);
   }
-  
+
   @media (prefers-color-scheme: dark) {
     .branch-summary-details {
       border-color: #7b4fa0;
       background: rgba(123, 79, 160, 0.12);
     }
   }
-  
+
   .branch-summary-summary {
     padding: 0.45rem 0.75rem;
     cursor: pointer;
@@ -875,13 +881,13 @@ const CSS = `
     align-items: center;
     gap: 0.5rem;
   }
-  
+
   @media (prefers-color-scheme: dark) {
     .branch-summary-summary {
       color: #ce93c8;
     }
   }
-  
+
   .branch-summary-content {
     padding: 0.5rem 0.75rem;
     font-size: 0.82rem;
@@ -890,7 +896,7 @@ const CSS = `
     white-space: pre-wrap;
     line-height: 1.5;
   }
-  
+
   .branch-from-id {
     font-size: 0.7rem;
     color: #999;
@@ -924,12 +930,12 @@ const CSS = `
     flex-wrap: wrap;
     gap: 0.35rem;
   }
-  
+
   .message-body {
     font-size: 0.95rem;
     line-height: 1.7;
   }
-  
+
   .message-body pre {
     background: var(--code-bg);
     padding: 0.75rem 1rem;
@@ -937,7 +943,7 @@ const CSS = `
     overflow-x: auto;
     font-size: 0.85rem;
   }
-  
+
   /* MR-1e: Markdown rendering styles */
   .message-body h1,
   .message-body h2,
@@ -949,29 +955,29 @@ const CSS = `
     font-weight: 600;
     line-height: 1.3;
   }
-  
+
   .message-body h1 { font-size: 1.3rem; }
   .message-body h2 { font-size: 1.15rem; }
   .message-body h3 { font-size: 1.05rem; }
-  
+
   .message-body p {
     margin: 0.5rem 0;
   }
-  
+
   .message-body p:first-child {
     margin-top: 0;
   }
-  
+
   .message-body ul,
   .message-body ol {
     margin: 0.5rem 0;
     padding-left: 1.5rem;
   }
-  
+
   .message-body li {
     margin: 0.25rem 0;
   }
-  
+
   .message-body blockquote {
     margin: 0.5rem 0;
     padding: 0.35rem 0.75rem;
@@ -980,13 +986,13 @@ const CSS = `
     background: var(--code-bg);
     border-radius: 0 4px 4px 0;
   }
-  
+
   @media (prefers-color-scheme: dark) {
     .message-body blockquote {
       color: #aaa;
     }
   }
-  
+
   .message-body table {
     border-collapse: collapse;
     margin: 0.5rem 0;
@@ -994,39 +1000,39 @@ const CSS = `
     overflow-x: auto;
     display: block;
   }
-  
+
   .message-body th,
   .message-body td {
     border: 1px solid var(--border);
     padding: 0.4rem 0.6rem;
     text-align: left;
   }
-  
+
   .message-body th {
     background: var(--code-bg);
     font-weight: 600;
   }
-  
+
   .message-body tr:nth-child(even) {
     background: var(--code-bg);
   }
-  
+
   .message-body hr {
     border: none;
     border-top: 1px solid var(--border);
     margin: 1rem 0;
   }
-  
+
   .message-body a {
     color: var(--accent);
     text-decoration: underline;
   }
-  
+
   .message-body img {
     max-width: 100%;
     border-radius: 4px;
   }
-  
+
   .message-body code {
     background: var(--code-bg);
     padding: 0.15rem 0.35rem;
@@ -1034,11 +1040,11 @@ const CSS = `
     font-size: 0.88em;
     font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
   }
-  
+
   .message-body pre {
     margin: 0.5rem 0;
   }
-  
+
   .message-body pre code {
     background: none;
     padding: 0;
@@ -1090,7 +1096,7 @@ const CSS = `
       background: #2d2d44 !important;
     }
   }
-  
+
   /* MR-1e: Markdown styles for thinking blocks */
   .thinking-content h1,
   .thinking-content h2,
@@ -1102,32 +1108,32 @@ const CSS = `
     font-size: 0.9rem;
     color: #888;
   }
-  
+
   .thinking-content p {
     margin: 0.3rem 0;
   }
-  
+
   .thinking-content ul,
   .thinking-content ol {
     margin: 0.3rem 0;
     padding-left: 1.25rem;
   }
-  
+
   .thinking-content li {
     margin: 0.15rem 0;
   }
-  
+
   .thinking-content code {
     background: rgba(0,0,0,0.1);
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
     font-size: 0.85em;
   }
-  
+
   .thinking-content pre {
     margin: 0.4rem 0;
   }
-  
+
   /* MR-1e: Markdown styles for branch summaries */
   .branch-summary-content h1,
   .branch-summary-content h2,
@@ -1135,22 +1141,22 @@ const CSS = `
     margin: 0.4rem 0 0.2rem;
     font-size: 0.88rem;
   }
-  
+
   .branch-summary-content p {
     margin: 0.3rem 0;
   }
-  
+
   .branch-summary-content code {
     background: rgba(0,0,0,0.1);
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
     font-size: 0.85em;
   }
-  
+
   .branch-summary-content pre {
     margin: 0.3rem 0;
   }
-  
+
   /* MR-1e: Markdown styles for compaction summaries */
   .compaction-summary h1,
   .compaction-summary h2,
@@ -1158,74 +1164,165 @@ const CSS = `
     margin: 0.4rem 0 0.2rem;
     font-size: 0.88rem;
   }
-  
+
   .compaction-summary p {
     margin: 0.3rem 0;
   }
-  
+
   .compaction-summary code {
     background: rgba(0,0,0,0.1);
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
     font-size: 0.85em;
   }
-  
+
   .compaction-summary pre {
     margin: 0.3rem 0;
   }
-  
+
   .message-expand {
     color: var(--accent);
     cursor: pointer;
     font-size: 0.8rem;
     margin-top: 0.5rem;
   }
-  
+
   .message-expand:hover {
     text-decoration: underline;
   }
-  
+
+  /* CP-1: Copy button styling */
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-left: 0.5rem;
+    opacity: 0.6;
+    transition: opacity 0.2s, background 0.2s;
+  }
+
+  .copy-btn:hover {
+    opacity: 1;
+    background: var(--code-bg);
+  }
+
+  .copy-btn.copied {
+    opacity: 1;
+    background: #e8f5e9;
+    color: #2e7d32;
+    border-color: #a5d6a7;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .copy-btn.copied {
+      background: #1b3a20;
+      color: #a5d6a7;
+      border-color: #2e7d32;
+    }
+  }
+
+  .message-body-wrapper {
+    position: relative;
+  }
+
+  .message-header .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+
+  .thinking-block .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+
+  .tool-result-message .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+
+  pre code .copy-btn {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.4rem;
+  }
+
+  /* CP-1: Code block wrapper for copy button */
+  .code-block-wrapper {
+    position: relative;
+    margin: 0.5rem 0;
+  }
+
+  .code-block-wrapper pre {
+    margin: 0;
+  }
+
+  .message-body pre,
+  .thinking-content pre,
+  .tool-result-message pre,
+  .custom-message pre,
+  .branch-summary-content pre,
+  .compaction-summary pre {
+    position: relative;
+  }
+
   .thinking-block {
     margin-bottom: 0.75rem;
     border: 1px dashed var(--border);
     border-radius: 6px;
     overflow: hidden;
   }
-  
+    margin-bottom: 0.75rem;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
   .thinking-block summary {
     padding: 0.5rem 0.75rem;
     cursor: pointer;
     font-size: 0.85rem;
     color: #888;
   }
-  
+
   .thinking-content {
     padding: 0.75rem;
     font-size: 0.85rem;
     color: #666;
     background: var(--code-bg);
   }
-  
+
   .tool-calls {
     margin-top: 0.75rem;
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
   }
-  
+
   .compaction-details {
     margin-top: 0.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
   }
-  
+
   .compaction-detail {
     border: 1px solid var(--border);
     border-radius: 6px;
     overflow: hidden;
   }
-  
+
   .compaction-detail summary {
     padding: 0.4rem 0.75rem;
     cursor: pointer;
@@ -1233,14 +1330,14 @@ const CSS = `
     color: #888;
     background: var(--code-bg);
   }
-  
+
   .compaction-summary {
     padding: 0.5rem 0.75rem;
     font-size: 0.82rem;
     color: #666;
     white-space: pre-wrap;
   }
-  
+
   .hook-tag {
     font-size: 0.7rem;
     padding: 0.1rem 0.3rem;
@@ -1249,7 +1346,7 @@ const CSS = `
     border-radius: 3px;
     margin-left: 0.3rem;
   }
-  
+
   .tool-call-badge {
     display: inline-flex;
     align-items: center;
@@ -1261,25 +1358,25 @@ const CSS = `
     font-size: 0.78rem;
     color: #555;
   }
-  
+
   .tool-result-message {
     border-left: 3px solid #ff9800;
     opacity: 0.85;
   }
-  
+
   .tool-result-error {
     border-left: 3px solid #f44336;
     opacity: 0.85;
   }
-  
+
   .tool-result-badge {
     color: #e65100;
   }
-  
+
   .tool-result-error .tool-result-badge {
     color: #d32f2f;
   }
-  
+
   @media (prefers-color-scheme: dark) {
     .tool-result-badge {
       color: #ffb74d;
@@ -1337,17 +1434,17 @@ const CSS = `
     font-size: 0.75rem;
     font-weight: 500;
   }
-  
+
   .tool-call-result.result-success {
     background: #e8f5e9;
     color: #2e7d32;
   }
-  
+
   .tool-call-result.result-error {
     background: #ffebee;
     color: #c62828;
   }
-  
+
   @media (prefers-color-scheme: dark) {
     .tool-call-result.result-success {
       background: #1b3a20;
@@ -1358,18 +1455,18 @@ const CSS = `
       color: #ef9a9a;
     }
   }
-  
+
   .tool-call-result-expand {
     color: var(--accent);
     cursor: pointer;
     font-size: 0.72rem;
     margin-left: 0.2rem;
   }
-  
+
   .tool-call-result-expand:hover {
     text-decoration: underline;
   }
-  
+
   @media (max-width: 600px) {
     .content {
       flex-direction: column;
@@ -1694,6 +1791,35 @@ const JS = `
         e.preventDefault();
         navigateSearch(e.shiftKey ? -1 : 1);
       }
+    });
+  });
+
+  // CP-1: Copy button functionality
+  function copyText(button, text) {
+    navigator.clipboard.writeText(text).then(function() {
+      button.classList.add('copied');
+      button.textContent = '✅';
+      setTimeout(function() {
+        button.classList.remove('copied');
+        button.textContent = '📋';
+      }, 2000);
+    }).catch(function() {
+      button.textContent = '❌';
+      setTimeout(function() {
+        button.textContent = '📋';
+      }, 2000);
+    });
+  }
+
+  // Wire up copy buttons
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.copy-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var text = this.dataset.copyText;
+        if (text) {
+          copyText(this, text);
+        }
+      });
     });
   });
 `;
