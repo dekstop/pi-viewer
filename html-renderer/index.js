@@ -271,10 +271,26 @@ function buildMetadataCard(sessionData) {
 
   // Token usage stats
   if (totalAllTokens > 0) {
+    // TV-1: Token usage visualisation
+    var inputPct = Math.round((totalInputTokens / totalAllTokens) * 100);
+    var outputPct = Math.round((totalOutputTokens / totalAllTokens) * 100);
+    var cachedReadPct = totalCacheReadTokens > 0 ? Math.round((totalCacheReadTokens / totalAllTokens) * 100) : 0;
+    var cachedWritePct = totalCacheWriteTokens > 0 ? Math.round((totalCacheWriteTokens / totalAllTokens) * 100) : 0;
+
     html += `<div class="meta-row">📊 Token stats:</div>`;
     html += `<div class="meta-row token-stats">`;
-    html += `📥 ${totalInputTokens.toLocaleString()} in `;
-    html += `📤 ${totalOutputTokens.toLocaleString()} out `;
+    html += `<div class="token-bar" title="Input: ${inputPct}% | Output: ${outputPct}%${cachedReadPct > 0 ? ' | Cache Read: ' + cachedReadPct + '%' : ''}${cachedWritePct > 0 ? ' | Cache Write: ' + cachedWritePct + '%' : ''}">
+      <div class="token-segment token-input" style="width:${inputPct}%"></div>
+      <div class="token-segment token-output" style="width:${outputPct}%"></div>`;
+    if (totalCacheReadTokens > 0) {
+      html += `<div class="token-segment token-cache-read" style="width:${cachedReadPct}%"></div>`;
+    }
+    if (totalCacheWriteTokens > 0) {
+      html += `<div class="token-segment token-cache-write" style="width:${cachedWritePct}%"></div>`;
+    }
+    html += `</div>`;
+    html += `📥 ${totalInputTokens.toLocaleString()} in (${inputPct}%) `;
+    html += `📤 ${totalOutputTokens.toLocaleString()} out (${outputPct}%) `;
     html += `📊 ${totalAllTokens.toLocaleString()} total`;
     if (totalCacheReadTokens > 0) {
       html += ` • 🧠 ${totalCacheReadTokens.toLocaleString()} cached`;
@@ -632,6 +648,51 @@ const CSS = `
     margin-left: 2rem;
     font-size: 0.82rem;
     color: #888;
+  }
+
+  /* TV-1: Token usage visualisation bar */
+  .token-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.35rem;
+    background: var(--code-bg);
+  }
+
+  .token-segment {
+    transition: width 0.3s ease;
+  }
+
+  .token-input {
+    background: #1976d2;
+  }
+
+  .token-output {
+    background: #4caf50;
+  }
+
+  .token-cache-read {
+    background: #ff9800;
+  }
+
+  .token-cache-write {
+    background: #9c27b0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .token-input {
+      background: #64b5f6;
+    }
+    .token-output {
+      background: #81c784;
+    }
+    .token-cache-read {
+      background: #ffb74d;
+    }
+    .token-cache-write {
+      background: #ce93c8;
+    }
   }
 
   .error-indicator {
